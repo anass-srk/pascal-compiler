@@ -3,6 +3,9 @@
 #include "lexer.hxx"
 #include <vector>
 #include <initializer_list>
+#include <deque>
+#include <optional>
+#include "semantics.hxx"
 
 // program := PROGRAM NAME '(' id_list ')' ';' block '.' 
 // id_list := NAME { ',' NAME } 
@@ -125,7 +128,7 @@ void declaration_part(); // declaration_part := { label_declaration_part | const
 void label_declaration_part(); // label_declaration_part := LABEL UINT { ',' UINT } ';'
 void constant_definition_part(); // constant_definition_part := CONST NAME '=' constant ';'
 // { NAME '=' constant ';' }
-void constant(); // constant= [ '+' | '-' ] ( CONSTANT_NAME | NUMBER ) | STRING
+Const constant(); // constant= [ '+' | '-' ] ( CONSTANT_NAME | NUMBER ) | STRING
 void type_definition_part(); // type_definition_part := TYPE NAME '=' type ';' { NAME '=' type ';' }
 void type();                 // type := simple_type | structured_type | pointer_type 
 //| procedure_type | function_type | TYPE_NAME
@@ -163,8 +166,7 @@ void simple_statement(); // simple_statement := [ assignment_statement | procedu
 void assignment_statement(); // assignment_statement := ( variable_access | FUNCTION_NAME ) ':=' expression
 void variable_access();      // variable_access := ACCESS_NAME { end_access_ }
 void end_access_(); // end_access_ := { array_access_ | record_access_ | '^' | function_parameters_ }
-void array_access_(); // array_access_ := '[' expression_list ']'
-void expression_list(); // expression_list := expression { ',' expression }
+void array_access_(); // array_access_ := '[' expression { ',' expression } ']'
 void expression(); // expression := simple_expression [ relational_operator simple_expression ]
 // relational_operator= '=' | '<>' | '<' | '<=' | '>' | '>=' | IN 
 void simple_expression(); // simple_expression := [ '+' | '-' ] term { addition_operator term }
@@ -174,18 +176,17 @@ void term(); // term := factor { multiplication_operator factor }
 void factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME | set
 // | variable_access | function_designator
 // | '(' expression ')' | NOT factor 
-void set(); // set := '[' element_list ']' 
-void element_list(); // element_list := [ expression { ',' expression } ]
+void set(); // set := '[' expression { ',' expression } ']' 
 void function_designator(); // function_designator := FUNCTION_NAME [ actual_parameter_list ]
 void actual_parameter_list(); // actual_parameter_list := '(' actual_parameter { ',' actual_parameter } ')'
 void actual_parameter(); // actual_parameter := expression | variable_access | PROCEDURE_NAME
 // | FUNCTION_NAME .
 void record_access_(); // record_access_ := '.' variable_access
-void function_parameters_(); // function_parameters_ := '(' [ expression_list ] ')'
+void function_parameters_(); // function_parameters_ := '(' [ expression { ',' expression } ] ')'
 void procedure_statement();  // procedure_statement := PROCEDURE_NAME [ actual_parameter_list ]
 void goto_statement(); // goto_statement := GOTO NUMBER
 void structured_statement(); // structured_statement := compound_statement | repetitive_statement
-// | conditional_statement | with_statement .
+// | conditional_statement .
 void compound_statement(); // compound_statement := BEGIN statement_sequence END
 void repetitive_statement(); // // repetitive_statement := while_statement | repeat_statement
 // | for_statement .
@@ -198,8 +199,6 @@ void if_statement(); // if_statement := IF expression THEN statement [ ELSE stat
 void case_statement(); // case_statement := CASE expression OF case_element { ';' case_element }
 //  [';' ELSE statement_sequence ] END
 void case_element(); // case_element := case_label_list ':' statement
-void with_statement(); // with_statement := WITH variable_access { ',' variable_access } DO
-// statement
 
 void match_adv(TOKEN_TYPE type);
 void match(TOKEN_TYPE type);
@@ -207,7 +206,29 @@ void match(TOKEN_TYPE type);
 void matches(const std::initializer_list<TOKEN_TYPE>& l);
 void matches_adv(const std::initializer_list<TOKEN_TYPE>& l);
 
+Label& get_label(Int id);
+void quit_if_label_id_used(Int id);
+
+void quit_if_id_is_used(std::string id);
+
+Const& get_constant(std::string id);
+
+inline std::string name_subrange(Int lower,Int upper){
+  return "_sub_" + std::to_string(lower) + "_" + std::to_string(upper);
+}
+inline std::string name_subrange(char lower,char upper){
+  return "_sub_" + std::string(1, lower) + "_" + std::string(1, upper);
+}
+
+std::shared_ptr<SubrangeType> get_subrange(Int lower,Int upper);
+std::shared_ptr<SubrangeType> get_subrange(char lower,char upper);
+std::shared_ptr<ArrayType> get_array(
+  std::initializer_list<std::shared_ptr<Type>> indexTypes,
+  std::shared_ptr<Type> valueType
+  );
+
 public:
+  std::deque<Info> infos;
   Parser(Lexer);
   Lexer& getLexer();
   void parse();

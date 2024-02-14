@@ -1,5 +1,103 @@
 #include "parser.hxx"
 
+//GET TYPES
+
+std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
+  std::string name = name_subrange(lower,upper);
+  for(auto &i: infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<SubrangeType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<SubrangeType> p = std::make_shared<SubrangeType>();
+  p->name = std::move(name);
+  p->boundsType = INT_TYPE;
+  p->ibounds[0] = lower;
+  p->ibounds[1] = upper;
+  infos[0].types[name] = p;
+  return p;
+}
+
+std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
+  std::string name = name_subrange(lower,upper);
+  for(auto &i: infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<SubrangeType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<SubrangeType> p = std::make_shared<SubrangeType>();
+  p->name = std::move(name);
+  p->boundsType = CHAR_TYPE;
+  p->cbounds[0] = lower;
+  p->cbounds[1] = upper;
+  infos[0].types[name] = p;
+  return p;
+}
+
+std::shared_ptr<ArrayType> Parser::get_array(
+  std::initializer_list<std::shared_ptr<Type>> indexTypes,
+  std::shared_ptr<Type> valueType
+  ){
+    std::string name = "_arr_";
+    for(auto& t:indexTypes){
+      name += t->name;
+    }
+    name += valueType->name;
+    for(auto &i: infos){
+      if(i.types.contains(name)){
+        return std::dynamic_pointer_cast<ArrayType>(i.types[name]);
+      }
+    }
+    std::shared_ptr<ArrayType> p = std::make_shared<ArrayType>();
+    p->name = std::move(name);
+    for(auto& t:indexTypes){
+      p->indexTypes.emplace_back(t);
+    }
+    p->valueType = valueType;
+    infos[0].types[name] = p;
+    return p;
+  }
+
+///GET ELEMENTS
+
+Label& Parser::get_label(Int id){
+  std::unordered_map<Int, Label>& labels = infos[0].labels;
+  if(labels.contains(id)){
+    return labels[id];
+  }
+  println("No label with id (",id,") exists !");
+  exit(EXIT_FAILURE);
+}
+
+void Parser::quit_if_label_id_used(Int id){
+  if(infos[infos.size()-1].labels.contains(id)){
+    println("The label id (", id, ") is already taken !");
+    exit(EXIT_FAILURE);
+  }
+}
+
+void Parser::quit_if_id_is_used(std::string id){
+  if(
+    infos[0].constants.contains(id) ||
+    infos[0].functions.contains(id) ||
+    infos[0].types.contains(id) ||
+    infos[0].variables.contains(id)
+  ){
+    println("The id (",id,") is already taken !");
+    exit(EXIT_FAILURE);
+  }
+}
+
+Const& Parser::get_constant(std::string id){
+  for(auto& i: infos){
+    if(i.constants.contains(id)){
+      return i.constants[id];
+    }
+  }
+  println("No constant with id (", id, ") exists !");
+  exit(EXIT_FAILURE);
+}
+
 void Parser::match_adv(TOKEN_TYPE type){
   lexer.next_sym();
   if (type != lexer.getToken().type){
@@ -69,7 +167,23 @@ void Parser::program(){
   match_adv(ID_TOKEN);
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
+  Info info;
+  info.types["int"] = std::make_shared<Type>(INT_TYPE);
+  info.types["uint"] = std::make_shared<Type>(UINT_TYPE);
+  info.types["real"] = std::make_shared<Type>(REAL_TYPE);
+  info.types["boolean"] = std::make_shared<Type>(BOOLEAN_TYPE);
+  info.types["char"] = std::make_shared<Type>(CHAR_TYPE);
+  infos.emplace_front(std::move(info));
   block();
+  println("Labels :");
+  for(auto& i:infos[0].labels){
+    println(i.first);
+  }
+  println("Constants :");
+  for(auto& i:infos[0].constants){
+    print(i.first," = ");
+    std::visit([](auto e){std::cout << e << '\n';}, i.second.value);
+  }
   //match(DOT_TOKEN);
 }
 
@@ -94,10 +208,21 @@ void Parser::declaration_part(){
 }
 
 void Parser::label_declaration_part(){
+  std::unordered_map<Int, Label>& labels = infos[0].labels;
   match(LABEL_TOKEN);
   match_adv(NUM_INT_TOKEN);
+  Int id = lexer.getToken().ival;
+  quit_if_label_id_used(id);
+  Label l;
+  l.loc = -1;
+  labels[id] = l;
   while(lexer.next_sym().type == COMMA_TOKEN){
     match_adv(NUM_INT_TOKEN);
+    id = lexer.getToken().ival;
+    quit_if_label_id_used(id);
+    Label l;
+    l.loc = -1;
+    labels[id] = l;
   }
   match(SEMI_TOKEN);
   lexer.next_sym();
@@ -108,22 +233,56 @@ void Parser::constant_definition_part(){
   lexer.next_sym();
   match(ID_TOKEN);
   do{
+    std::string id = lexer.getToken().id;
+    quit_if_id_is_used(id);
     match_adv(EQ_TOKEN);
     lexer.next_sym();
-    constant();
+    infos[0].constants[id] = constant();
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);
 }
 
-void Parser::constant(){
+Const Parser::constant(){
   Lexeme& t = lexer.getToken();
   bool neg = (t.type == MINUS_TOKEN);
-  if(neg || t.type == PLUS_TOKEN){
+  bool pos = (t.type == PLUS_TOKEN);
+  if(neg || pos){
     matches_adv({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN});
   }else{
     matches({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN,STRING_LITERAL_TOKEN});
   }
+  Const c;
+  if(t.type == ID_TOKEN){
+    c = get_constant(t.id);
+  }else{
+    switch(t.type){
+      case NUM_INT_TOKEN:
+        c.type = INT_TYPE;
+        c.value = t.ival;
+        break;
+      case NUM_REAL_TOKEN:
+        c.type = REAL_TYPE;
+        c.value = t.dval;
+        break;
+      case STRING_LITERAL_TOKEN:
+        c.type = CONST_STR_TYPE;
+        c.value = t.id;
+        break;
+    }
+  }
+  if(c.type == CONST_STR_TYPE && (pos || neg)){
+    println("Cannot use '+' or '-' with a string !");
+    exit(EXIT_FAILURE);
+  }
+  if(neg){
+    if(c.type == INT_TYPE){
+      c.value = -std::get<Int>(c.value);
+    }else{
+      c.value = -std::get<double>(c.value);
+    }
+  }
   lexer.next_sym();
+  return c;
 }
 
 void Parser::type_definition_part(){
@@ -207,6 +366,7 @@ void Parser::id_list(){
 }
 
 void Parser::subrange_type(){
+  println("Here");
   constant();
   match(DOTDOT_TOKEN);
   lexer.next_sym();
@@ -415,6 +575,67 @@ void Parser::function_declaration(){
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
   block();
+}
+
+void Parser::expression(){
+  simple_expression();
+  switch(lexer.getToken().type){
+    case EQ_TOKEN:
+    case NEQ_TOKEN:
+    case LT_TOKEN:
+    case LE_TOKEN:
+    case GT_TOKEN:
+    case GE_TOKEN:
+    case IN_TOKEN:
+      lexer.next_sym();
+      simple_expression();
+      break;
+    default: return;
+  }
+}
+
+void Parser::simple_expression(){
+  switch(lexer.getToken().type){
+    case PLUS_TOKEN:
+    case MINUS_TOKEN:
+      lexer.next_sym();
+      break;
+    default: break;
+  }
+  term();
+  bool in = true;
+  while(in){
+    switch(lexer.getToken().type){
+      case PLUS_TOKEN:
+      case MINUS_TOKEN:
+      case OR_TOKEN:
+        lexer.next_sym();
+        term();
+        break;
+      default: in = false; break;
+    }
+  }
+}
+
+void Parser::term(){
+  factor();
+  bool in = true;
+  while(in){
+    switch(lexer.getToken().type){
+      case STAR_TOKEN:
+      case SLASH_TOKEN:
+      case DIV_TOKEN:
+      case MOD_TOKEN:
+      case AND_TOKEN:
+        lexer.next_sym();
+        factor();
+        break;
+      default: in = false; break;
+    }
+  }
+}
+
+void Parser::factor(){
 }
 
 
