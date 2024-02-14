@@ -14,7 +14,7 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
   p->boundsType = INT_TYPE;
   p->ibounds[0] = lower;
   p->ibounds[1] = upper;
-  infos[0].types[name] = p;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
 
@@ -30,12 +30,32 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
   p->boundsType = CHAR_TYPE;
   p->cbounds[0] = lower;
   p->cbounds[1] = upper;
-  infos[0].types[name] = p;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
+
+std::shared_ptr<EnumType> Parser::get_enum(std::vector<std::string> v){
+  std::string name = "_enum";
+  for(auto& s: v){
+    name += "_" + s + "_";
+  }
+  for(auto &i: infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<EnumType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<EnumType> p = std::make_shared<EnumType>();
+  p->name = std::move(name);
+  size_t i = 0;
+  for(auto& s:v){
+    p->ids[s] = i++;
+  }
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
 
 std::shared_ptr<ArrayType> Parser::get_array(
-  std::initializer_list<std::shared_ptr<Type>> indexTypes,
+  std::vector<std::shared_ptr<Type>> indexTypes,
   std::shared_ptr<Type> valueType
   ){
     std::string name = "_arr_";
@@ -54,7 +74,7 @@ std::shared_ptr<ArrayType> Parser::get_array(
       p->indexTypes.emplace_back(t);
     }
     p->valueType = valueType;
-    infos[0].types[name] = p;
+    infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
     return p;
   }
 
@@ -76,7 +96,12 @@ void Parser::quit_if_label_id_used(Int id){
   }
 }
 
-void Parser::quit_if_id_is_used(std::string id){
+void Parser::quit_if_id_is_used(const std::string& id){
+  for(auto& [_,t] : infos[0].types){
+    if(t->type == ENUM_TYPE && std::dynamic_pointer_cast<EnumType>(t)->ids.contains(id)){
+      return;
+    }
+  }
   if(
     infos[0].constants.contains(id) ||
     infos[0].functions.contains(id) ||
@@ -88,15 +113,25 @@ void Parser::quit_if_id_is_used(std::string id){
   }
 }
 
-Const& Parser::get_constant(std::string id){
+std::shared_ptr<Const> Parser::get_constant(const std::string& id){
   for(auto& i: infos){
     if(i.constants.contains(id)){
       return i.constants[id];
     }
   }
-  println("No constant with id (", id, ") exists !");
-  exit(EXIT_FAILURE);
+  return std::shared_ptr<Const>();
 }
+
+std::shared_ptr<Type> Parser::get_type(const std::string& id){
+  for(auto& i: infos){
+    if(i.types.contains(id)){
+      return i.types[id];
+    }
+  }
+  return std::shared_ptr<Type>();
+}
+
+// Helper Methods for parsing
 
 void Parser::match_adv(TOKEN_TYPE type){
   lexer.next_sym();
@@ -162,6 +197,8 @@ void Parser::parse(){
   program();
 }
 
+//Parser Rule
+
 void Parser::program(){
   match_adv(PROGRAM_TOKEN);
   match_adv(ID_TOKEN);
@@ -182,7 +219,27 @@ void Parser::program(){
   println("Constants :");
   for(auto& i:infos[0].constants){
     print(i.first," = ");
-    std::visit([](auto e){std::cout << e << '\n';}, i.second.value);
+    std::visit([](auto e){std::cout << e << '\n';}, i.second.get()->value);
+  }
+  println("Types :");
+  for(auto& [s,t]:infos[0].types){
+    print("Type (",s,") : ");
+    if(t->type == ENUM_TYPE){
+      auto e = std::dynamic_pointer_cast<EnumType>(t);
+      print("( ");
+      for(auto &[id,val] : e->ids){
+        print(id,"(",val,") ");
+      }
+      print(")");
+    }else if(t->type == SUBRANGE_TYPE){
+      auto sub = std::dynamic_pointer_cast<SubrangeType>(t);
+      if(sub->boundsType == INT_TYPE){
+        print("From ",sub->ibounds[0]," to ",sub->ibounds[1]);
+      }else{
+        print("From ", sub->cbounds[0], " to ", sub->cbounds[1]);
+      }
+    }
+    println();
   }
   //match(DOT_TOKEN);
 }
@@ -237,7 +294,7 @@ void Parser::constant_definition_part(){
     quit_if_id_is_used(id);
     match_adv(EQ_TOKEN);
     lexer.next_sym();
-    infos[0].constants[id] = constant();
+    infos[0].constants[id] = std::make_shared<Const>(constant());
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);
 }
@@ -253,7 +310,11 @@ Const Parser::constant(){
   }
   Const c;
   if(t.type == ID_TOKEN){
-    c = get_constant(t.id);
+    auto tmp = get_constant(t.id);
+    if(!tmp){
+      println("No constant with id (",t.id,") exists !");
+    }
+    c = *tmp;
   }else{
     switch(t.type){
       case NUM_INT_TOKEN:
@@ -289,6 +350,7 @@ void Parser::type_definition_part(){
   match(TYPE_TOKEN);
   match_adv(ID_TOKEN);
   do{
+    std::string name = lexer.getToken().id;
     match_adv(EQ_TOKEN);
     lexer.next_sym();
     type();
@@ -296,7 +358,7 @@ void Parser::type_definition_part(){
   }while(lexer.next_sym().type == ID_TOKEN);
 }
 
-void Parser::type(){
+std::shared_ptr<Type> Parser::type(){
   //TODO : distinguish const id and type name
   switch(lexer.getToken().type){
     case PLUS_TOKEN:
@@ -307,7 +369,7 @@ void Parser::type(){
     case NUM_REAL_TOKEN:
     case STRING_LITERAL_TOKEN:
     case LP_TOKEN:
-      simple_type();
+      return simple_type();
       break;
     case PACKED_TOKEN:
     case ARRAY_TOKEN:
@@ -320,7 +382,19 @@ void Parser::type(){
     case PROCEDURE_TOKEN: procedure_type(); break;
     case FUNCTION_TOKEN: function_type(); break;
     // type name
-    case ID_TOKEN: lexer.next_sym();  break;
+    case ID_TOKEN: 
+      {
+        auto tmp1 = get_constant(lexer.getToken().id);
+        if(tmp1){
+          return simple_type();
+        }
+        auto tmp2 = get_type(lexer.getToken().id);
+        if(tmp2){
+          lexer.next_sym();
+          return tmp2;
+        }
+      }
+      break;
     default:
       matches({
         PLUS_TOKEN,
@@ -340,37 +414,58 @@ void Parser::type(){
         FUNCTION_TOKEN
       });
   }
+  return std::make_shared<Type>(VOID_TYPE);
 }
 
-void Parser::simple_type(){
+std::shared_ptr<Type> Parser::simple_type(){
   if(lexer.getToken().type == LP_TOKEN){
-    enumerated_type();
+    return std::dynamic_pointer_cast<Type>(enumerated_type());
   }else{
-    subrange_type();
+    return std::dynamic_pointer_cast<Type>(subrange_type());
   }
 }
 
-void Parser::enumerated_type(){
+std::shared_ptr<EnumType> Parser::enumerated_type(){
   match(LP_TOKEN);
   lexer.next_sym();
-  id_list();
+  std::vector<std::string> ids = id_list();
   match(RP_TOKEN);
   lexer.next_sym();
+  return get_enum(std::move(ids));
 }
 
-void Parser::id_list(){
+std::vector<std::string> Parser::id_list(){
+  std::vector<std::string> v;
   match(ID_TOKEN);
+  v.push_back(lexer.getToken().id);
   while(lexer.next_sym().type == COMMA_TOKEN){
     match_adv(ID_TOKEN);
+    v.push_back(lexer.getToken().id);
   }
+  return v;
 }
 
-void Parser::subrange_type(){
-  println("Here");
-  constant();
+std::shared_ptr<SubrangeType> Parser::subrange_type(){
+  Const lower_bound = constant();
   match(DOTDOT_TOKEN);
   lexer.next_sym();
-  constant();
+  Const upper_bound = constant();
+  if(lower_bound.type != upper_bound.type){
+    println("a subrange is made of 2 constants of the same type !");
+    exit(EXIT_FAILURE);
+  }
+  if(lower_bound.type == INT_TYPE){
+    return get_subrange(get<Int>(lower_bound.value),get<Int>(upper_bound.value));
+  }
+  if(lower_bound.type == CONST_STR_TYPE){
+    if(get<std::string>(lower_bound.value).length() != 1 || get<std::string>(upper_bound.value).length() != 1){
+      println("a subrange is made of 2 chars not strings !");
+      exit(EXIT_FAILURE);
+    }
+    return get_subrange(get<std::string>(lower_bound.value)[0],get<std::string>(upper_bound.value)[0]);
+  }
+  println("Cannot create a subrange of something other than chars or ints !");
+  exit(EXIT_FAILURE);
 }
 
 void Parser::structured_type(){

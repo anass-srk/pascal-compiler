@@ -94,10 +94,10 @@ struct Function{
 
 struct Info{
   std::unordered_map<Int,Label> labels;
-  std::unordered_map<std::string,Const> constants;
+  std::unordered_map<std::string,std::shared_ptr<Const>> constants;
   std::unordered_map<std::string,std::shared_ptr<Type>> types;
   std::unordered_map<std::string,std::shared_ptr<Type>> variables; 
-  std::unordered_map<std::string,Function> functions;
+  std::unordered_map<std::string,std::shared_ptr<Function>> functions;
 };
 
 #endif

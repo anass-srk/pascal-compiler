@@ -120,7 +120,7 @@ class Parser{
   std::string program_name;
   
 void program(); // program := PROGRAM ID ';' block '.'
-void id_list(); // id_list := NAME { ',' NAME }
+std::vector<std::string> id_list(); // id_list := NAME { ',' NAME }
 void block();   // block := declaration_part statement_part
 void declaration_part(); // declaration_part := { label_declaration_part | constant_definition_part |
 // | type_definition_part | variable_declaration_part
@@ -130,11 +130,11 @@ void constant_definition_part(); // constant_definition_part := CONST NAME '=' c
 // { NAME '=' constant ';' }
 Const constant(); // constant= [ '+' | '-' ] ( CONSTANT_NAME | NUMBER ) | STRING
 void type_definition_part(); // type_definition_part := TYPE NAME '=' type ';' { NAME '=' type ';' }
-void type();                 // type := simple_type | structured_type | pointer_type 
+std::shared_ptr<Type> type(); // type := simple_type | structured_type | pointer_type 
 //| procedure_type | function_type | TYPE_NAME
-void simple_type(); // simple_type := subrange_type | enumerated_type
-void subrange_type(); // subrange_type := constant '..' constant
-void enumerated_type(); // enumerated_type := '(' id_list ')'
+std::shared_ptr<Type> simple_type(); // simple_type := subrange_type | enumerated_type
+std::shared_ptr<SubrangeType> subrange_type(); // subrange_type := constant '..' constant
+std::shared_ptr<EnumType> enumerated_type();       // enumerated_type := '(' id_list ')'
 void structured_type(); // structured_type := [ PACKED ] unpacked_structured_type
 void unpacked_structured_type(); //unpacked_structured_type := array_type | record_type | set_type
 // | file_type
@@ -209,9 +209,10 @@ void matches_adv(const std::initializer_list<TOKEN_TYPE>& l);
 Label& get_label(Int id);
 void quit_if_label_id_used(Int id);
 
-void quit_if_id_is_used(std::string id);
+void quit_if_id_is_used(const std::string& id);
 
-Const& get_constant(std::string id);
+std::shared_ptr<Const> get_constant(const std::string& id);
+std::shared_ptr<Type> get_type(const std::string& id);
 
 inline std::string name_subrange(Int lower,Int upper){
   return "_sub_" + std::to_string(lower) + "_" + std::to_string(upper);
@@ -222,8 +223,9 @@ inline std::string name_subrange(char lower,char upper){
 
 std::shared_ptr<SubrangeType> get_subrange(Int lower,Int upper);
 std::shared_ptr<SubrangeType> get_subrange(char lower,char upper);
+std::shared_ptr<EnumType> get_enum(std::vector<std::string> v);
 std::shared_ptr<ArrayType> get_array(
-  std::initializer_list<std::shared_ptr<Type>> indexTypes,
+  std::vector<std::shared_ptr<Type>> indexTypes,
   std::shared_ptr<Type> valueType
   );
 
