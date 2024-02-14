@@ -50,18 +50,12 @@ Lexer::Lexer(std::string filename)
   read_char();
 }
 
-Lexer::Lexer(const Lexer &l){
-  current_char = l.current_char;
-  file = l.file;
-  token = l.token;
-  keywords = l.keywords;
-}
-
 Lexer::Lexer(Lexer &&l){
   current_char = l.current_char;
   file = l.file;
   token = std::move(l.token);
   keywords = std::move(l.keywords);
+  l.file = nullptr;
 }
 
 Lexeme& Lexer::getToken(){
@@ -115,6 +109,13 @@ void Lexer::read_number(){
     token.id += '.';
     read_char();
     if(!isdigit(current_char)){
+      if(current_char == '.'){
+        ungetc(current_char, file);
+        token.id += '0';
+        token.ival = atoll(token.id.c_str());
+        token.type = NUM_INT_TOKEN;
+        return;
+      }
       lexer_error(LE_INVALID_NUMBER);
     }
     do{
@@ -156,8 +157,9 @@ void Lexer::read_word(){
   if(keywords.contains(token.id)){
     token.type = keywords[token.id];
     return;
+  }else{
+    token.type = ID_TOKEN;
   }
-  token.type = ID_TOKEN;
 }
 
 void Lexer::read_string(){
@@ -254,11 +256,13 @@ Lexeme& Lexer::next_sym(){
         if(current_char == '>'){
           token.id += current_char;
           token.type = NEQ_TOKEN;
+          read_char();
           return token;
         }
         if(current_char == '='){
           token.id += current_char;
           token.type = LE_TOKEN;
+          read_char();
           return token;
         }
         token.type = LT_TOKEN;

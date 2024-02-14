@@ -4,7 +4,7 @@ void Parser::match_adv(TOKEN_TYPE type){
   lexer.next_sym();
   if (type != lexer.getToken().type){
     println("Error at ",lexer.getToken().line,':',lexer.getToken().col);
-    printf("Expected %s ! Found %s !\n",token_type_name[type],token_type_name[lexer.getToken().type]);
+    printf("Expected %s ! Found %s !\n", token_type_name[type].c_str(), token_type_name[lexer.getToken().type].c_str());
     exit(EXIT_FAILURE);
   }
 }
@@ -12,12 +12,13 @@ void Parser::match_adv(TOKEN_TYPE type){
 void Parser::match(TOKEN_TYPE type){
   if (type != lexer.getToken().type){
     println("Error at ", lexer.getToken().line, ':', lexer.getToken().col);
-    printf("Expected %s ! Found %s !\n",token_type_name[type],token_type_name[lexer.getToken().type]);
+    printf("Expected %s ! Found %s !\n", token_type_name[type].c_str(), token_type_name[lexer.getToken().type].c_str());
     exit(EXIT_FAILURE);
   }
 }
 
-void Parser::matches(const std::initializer_list<TOKEN_TYPE> &l){
+void Parser::matches(const std::initializer_list<TOKEN_TYPE> &l)
+{
   for(auto& t: l){
     if(lexer.getToken().type == t){
       return;
@@ -30,9 +31,11 @@ void Parser::matches(const std::initializer_list<TOKEN_TYPE> &l){
   }
   msg += "! Found " + token_type_name[lexer.getToken().type] + " !";
   println(msg);
+  exit(EXIT_FAILURE);
 }
 
-void Parser::matches_adv(const std::initializer_list<TOKEN_TYPE> &l){
+void Parser::matches_adv(const std::initializer_list<TOKEN_TYPE> &l)
+{
   lexer.next_sym();
   for(auto& t: l){
     if(lexer.getToken().type == t){
@@ -46,6 +49,7 @@ void Parser::matches_adv(const std::initializer_list<TOKEN_TYPE> &l){
   }
   msg += "! Found " + token_type_name[lexer.getToken().type] + " !";
   println(msg);
+  exit(EXIT_FAILURE);
 }
 
 Parser::Parser(Lexer l) : lexer(std::move(l)){
@@ -66,7 +70,7 @@ void Parser::program(){
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
   block();
-  match(DOT_TOKEN);
+  //match(DOT_TOKEN);
 }
 
 void Parser::block(){
@@ -95,16 +99,20 @@ void Parser::label_declaration_part(){
   while(lexer.next_sym().type == COMMA_TOKEN){
     match_adv(NUM_INT_TOKEN);
   }
+  match(SEMI_TOKEN);
+  lexer.next_sym();
 }
 
 void Parser::constant_definition_part(){
   match(CONST_TOKEN);
+  lexer.next_sym();
+  match(ID_TOKEN);
   do{
-    match_adv(ID_TOKEN);
     match_adv(EQ_TOKEN);
     lexer.next_sym();
     constant();
-  }while(lexer.getToken().type == SEMI_TOKEN);
+    match(SEMI_TOKEN);
+  }while(lexer.next_sym().type == ID_TOKEN);
 }
 
 void Parser::constant(){
@@ -113,19 +121,20 @@ void Parser::constant(){
   if(neg || t.type == PLUS_TOKEN){
     matches_adv({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN});
   }else{
-    matches_adv({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN,STRING_LITERAL_TOKEN});
+    matches({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN,STRING_LITERAL_TOKEN});
   }
   lexer.next_sym();
 }
 
 void Parser::type_definition_part(){
   match(TYPE_TOKEN);
+  match_adv(ID_TOKEN);
   do{
-    match_adv(ID_TOKEN);
     match_adv(EQ_TOKEN);
     lexer.next_sym();
     type();
-  }while(lexer.getToken().type == SEMI_TOKEN);
+    match(SEMI_TOKEN);
+  }while(lexer.next_sym().type == ID_TOKEN);
 }
 
 void Parser::type(){
@@ -134,7 +143,7 @@ void Parser::type(){
     case PLUS_TOKEN:
     case MINUS_TOKEN:
     // const id
-    case ID_TOKEN:
+    //case ID_TOKEN:
     case NUM_INT_TOKEN:
     case NUM_REAL_TOKEN:
     case STRING_LITERAL_TOKEN:
@@ -149,11 +158,11 @@ void Parser::type(){
       structured_type();
       break;
     case POINTER_TOKEN: pointer_type();  break;
-    // case PROCEDURE_TOKEN: procedure_type(); break;
-    // case FUNCTION_TOKEN: function_type(); break;
+    case PROCEDURE_TOKEN: procedure_type(); break;
+    case FUNCTION_TOKEN: function_type(); break;
     // type name
-    //case ID_TOKEN: break;
-    default: 
+    case ID_TOKEN: lexer.next_sym();  break;
+    default:
       matches({
         PLUS_TOKEN,
         MINUS_TOKEN,
@@ -218,6 +227,13 @@ void Parser::unpacked_structured_type(){
     case RECORD_TOKEN: record_type(); break;
     case SET_TOKEN: set_type(); break;
     case FILE_TOKEN: file_type(); break;
+    default:
+      matches({
+        ARRAY_TOKEN,
+        RECORD_TOKEN,
+        SET_TOKEN,
+        FILE_TOKEN
+      });
   }
 }
 
@@ -249,6 +265,8 @@ void Parser::field_list(){
       if(lexer.getToken().type == SEMI_TOKEN){
         lexer.next_sym();
         variant_part();
+      }else if(lexer.getToken().type == CASE_TOKEN){
+        variant_part();
       }
       break;
     case CASE_TOKEN: variant_part(); break;
@@ -262,8 +280,7 @@ void Parser::fixed_part(){
   match(COLON_TOKEN);
   lexer.next_sym();
   type();
-  while(lexer.getToken().type == SEMI_TOKEN){
-    lexer.next_sym();
+  while(lexer.getToken().type == SEMI_TOKEN && lexer.next_sym().type != CASE_TOKEN){
     id_list();
     match(COLON_TOKEN);
     lexer.next_sym();
@@ -279,10 +296,10 @@ void Parser::variant_part(){
   }
   match_adv(ID_TOKEN);
   match_adv(OF_TOKEN);
-  lexer.next_sym();
   do{
+    lexer.next_sym();
     variant();
-  }while(lexer.next_sym().type == SEMI_TOKEN);
+  }while(lexer.getToken().type == SEMI_TOKEN);
 }
 
 void Parser::variant(){
@@ -292,11 +309,11 @@ void Parser::variant(){
   lexer.next_sym();
   field_list();
   match(RP_TOKEN);
+  lexer.next_sym();
 }
 
 void Parser::case_label_list(){
   constant();
-  lexer.next_sym();
   while(lexer.getToken().type == COMMA_TOKEN){
     lexer.next_sym();
     constant();
@@ -326,12 +343,81 @@ void Parser::pointer_type(){
 
 void Parser::variable_declaration_part(){
   match(VAR_TOKEN);
+  lexer.next_sym();
   do{
-    lexer.next_sym();
     id_list();
     match(COLON_TOKEN);
     lexer.next_sym();
     type();
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);
+  
+}
+
+void Parser::procedure_type(){
+  match(PROCEDURE_TOKEN);
+  lexer.next_sym();
+  if(lexer.getToken().type == LP_TOKEN){
+    formal_parameter_list();
+  }
+}
+
+void Parser::formal_parameter_list(){
+  match(LP_TOKEN);
+  do{
+    lexer.next_sym();
+    formal_parameter_section();
+  }while(lexer.getToken().type == SEMI_TOKEN);
+  match(RP_TOKEN);
+  lexer.next_sym();
+}
+
+void Parser::formal_parameter_section(){
+  if(lexer.getToken().type == VAR_TOKEN){
+    lexer.next_sym();
+  }
+  id_list();
+  match(COLON_TOKEN);
+  match_adv(ID_TOKEN);
+  lexer.next_sym();
+}
+
+void Parser::function_type(){
+  match(FUNCTION_TOKEN);
+  lexer.next_sym();
+  if(lexer.getToken().type == LP_TOKEN){
+    formal_parameter_list();
+  }
+  match(COLON_TOKEN);
+  match_adv(ID_TOKEN);
+  lexer.next_sym();
+}
+
+void Parser::procedure_declaration(){
+  match(PROCEDURE_TOKEN);
+  match_adv(ID_TOKEN);
+  if(lexer.next_sym().type == LP_TOKEN){
+    formal_parameter_list();
+  }
+  match(SEMI_TOKEN);
+  lexer.next_sym();
+  block();
+}
+
+void Parser::function_declaration(){
+  match(FUNCTION_TOKEN);
+  match_adv(ID_TOKEN);
+  if(lexer.next_sym().type == LP_TOKEN){
+    formal_parameter_list();
+  }
+  match(COLON_TOKEN);
+  match_adv(ID_TOKEN);
+  match_adv(SEMI_TOKEN);
+  lexer.next_sym();
+  block();
+}
+
+
+void Parser::statement_part(){
+  lexer.next_sym();
 }

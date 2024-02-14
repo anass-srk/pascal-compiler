@@ -2,6 +2,7 @@
 #define PARSER_HXX
 #include "lexer.hxx"
 #include <vector>
+#include <initializer_list>
 
 // program := PROGRAM NAME '(' id_list ')' ';' block '.' 
 // id_list := NAME { ',' NAME } 
@@ -114,7 +115,7 @@
 class Parser{
   Lexer lexer;
   std::string program_name;
-
+  
 void program(); // program := PROGRAM ID ';' block '.'
 void id_list(); // id_list := NAME { ',' NAME }
 void block();   // block := declaration_part statement_part
@@ -151,11 +152,9 @@ void formal_parameter_list(); // formal_parameter_list := '(' formal_parameter_s
 // { ';' formal_parameter_section } ')'
 void formal_parameter_section(); // formal_parameter_section := [ VAR ] id_list ':' TYPE_NAME
 void variable_declaration_part(); // variable_declaration_part := VAR id_list ':' type ';'
-// { id_list ':' type ';' } 
-void procedure_declaration(); // procedure_declaration := procedure_heading ';' ( block | FORWARD ) .
-void procedure_heading();   // procedure_heading := PROCEDURE NAME [ formal_parameter_list ] .
-void function_declaration(); // function_declaration := function_heading ';' ( block | FORWARD ) .
-void function_heading();// function_heading := FUNCTION NAME [ formal_parameter_list ] ':' TYPE_NAME .
+// { id_list ':' type ';' }
+void procedure_declaration(); // procedure_declaration := PROCEDURE NAME [ formal_parameter_list ] ';' block .
+void function_declaration();  // function_declaration := FUNCTION NAME [ formal_parameter_list ] ':' TYPE_NAME ';' block .
 void statement_part();  // statement_part := BEGIN statement_sequence END
 void statement_sequence(); // statement_sequence := statement { ';' statement }
 void statement(); // statement := [ LABEL ':' ] ( simple_statement | structured_statement )
@@ -206,7 +205,7 @@ void match_adv(TOKEN_TYPE type);
 void match(TOKEN_TYPE type);
 
 void matches(const std::initializer_list<TOKEN_TYPE>& l);
-void matches_adv(const std::initializer_list<TOKEN_TYPE> &l);
+void matches_adv(const std::initializer_list<TOKEN_TYPE>& l);
 
 public:
   Parser(Lexer);

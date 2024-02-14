@@ -203,7 +203,6 @@ class Lexer{
 
 public:
   Lexer(std::string filename);
-  Lexer(const Lexer& l);
   Lexer(Lexer &&l);
 
   Lexeme& next_sym();
