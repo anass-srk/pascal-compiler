@@ -56,7 +56,20 @@ enum OP_CODE{
   POP_OP,
 
   WRITE_OP,
-  READ_OP
+  READ_OP,
+
+  JMPLT_OP,
+  JMPLTE_OP,
+  JMPEQ_OP,
+  JMPNQ_OP,
+  JMPGT_OP,
+  JMPGE_OP,
+
+  CMPI_OP,
+  CMPU_OP,
+  CMPF_OP,
+  CMPB_OP,
+  CMPC_OP
 };
 
 union Address{
@@ -64,19 +77,47 @@ union Address{
   size_t s;
 };
 
+enum STD_TYPE {
+  UINT_STD,
+  INT_STD,
+  REAL_STD,
+  UCHAR_STD,
+  CHAR_STD
+};
+
 union StdType{
-  int i;
   uint u;
-  float d;
+  int i;
+  float f;
+  u_char b;
   char c;
-  bool b;
+  StdType(int i) : i(i){}
+  StdType(uint u) : u(u){}
+  StdType(float f) : f(f){}
+  StdType(u_char b) : b(b){}
+  StdType(char c) : c(c){}
+};
+
+static const std::string std_type_names[] = {
+  "UINT",
+  "INT",
+  "REAL",
+  "UCHAR",
+  "CHAR"
+};
+
+enum FLAG{
+  LT_FLAG,
+  EQ_FLAG,
+  GT_FLAG
 };
 
 struct VM{
-  std::vector<uint> bytecode;
+  std::vector<StdType> bytecode;
   std::size_t pc;
+  FLAG flag;
 
-  size_t add_data(uint data);
+  size_t add_data(StdType data);
   size_t add_inst(OP_CODE instr);
   void run();
 
@@ -87,12 +128,33 @@ struct VM{
   void push_addr_op();
   void push_const_op();
   void pop_op();
-  void write_uint();
-  void read_uint();
+  void write_op();
+  void read_op();
+
   void addu_op();
   void subu_op();
   void mulu_op();
   void divu_op();
+
+  void addi_op();
+  void subi_op();
+  void muli_op();
+  void divi_op();
+
+  void addf_op();
+  void subf_op();
+  void mulf_op();
+  void divf_op();
+
+  void addb_op();
+  void subb_op();
+  void mulb_op();
+  void divb_op();
+
+  void addc_op();
+  void subc_op();
+  void mulc_op();
+  void divc_op();
 };
 
 
