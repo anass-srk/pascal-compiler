@@ -390,6 +390,10 @@ void Parser::program(){
   for(auto& [s,t]:infos[0].types){
     print_type(t,s);
   }
+  for(auto& [s,t] : infos[0].variables){
+    println("var (",s,")");
+    print_type(t);
+  }
   //match(DOT_TOKEN);
 }
 
@@ -830,13 +834,16 @@ void Parser::variable_declaration_part(){
   match(VAR_TOKEN);
   lexer.next_sym();
   do{
-    id_list();
+    std::vector<std::string> names = id_list();
     match(COLON_TOKEN);
     lexer.next_sym();
-    type();
+    auto t = type();
+    for(auto& name : names){
+      quit_if_id_is_used(name);
+      infos[0].variables[name] = t;
+    }
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);
-  
 }
 
 std::shared_ptr<FunctionType> Parser::procedure_type(){
