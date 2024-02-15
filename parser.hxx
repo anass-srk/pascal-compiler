@@ -135,20 +135,20 @@ std::shared_ptr<Type> type(); // type := simple_type | structured_type | pointer
 std::shared_ptr<Type> simple_type(); // simple_type := subrange_type | enumerated_type
 std::shared_ptr<SubrangeType> subrange_type(); // subrange_type := constant '..' constant
 std::shared_ptr<EnumType> enumerated_type();       // enumerated_type := '(' id_list ')'
-void structured_type(); // structured_type := [ PACKED ] unpacked_structured_type
-void unpacked_structured_type(); //unpacked_structured_type := array_type | record_type | set_type
+std::shared_ptr<Type> structured_type();          // structured_type := [ PACKED ] unpacked_structured_type
+std::shared_ptr<Type> unpacked_structured_type(); // unpacked_structured_type := array_type | record_type | set_type
 // | file_type
-void array_type(); // array_type := ARRAY '[' simple_type { ',' simple_type } ']' OF
+std::shared_ptr<ArrayType> array_type(); // array_type := ARRAY '[' ( simple_type | TYPE_NAME) { ',' ( simple_type | TYPE_NAME) } ']' OF
 // type
-void record_type(); // record_type := RECORD field_list END
-void field_list();  // field_list := ( fixed_part [ ';' variant_part ] | variant_part )
-void fixed_part();  // fixed_part := id_list ':' type { ';' id_list ':' type }
-void variant_part();   // variant_part := CASE [NAME ':'] TYPE_NAME OF variant { ';' variant }
-void variant();        // variant := case_label_list ':' '(' field_list ')'
-void case_label_list(); // case_label_list := constant { ',' constant }
-void set_type();        // set_type := SET OF type
-void file_type();       // file_type := FILE [ OF type ]
-void pointer_type();    // pointer_type := '^' TYPE_NAME
+std::shared_ptr<RecordType> record_type(); // record_type := RECORD field_list END
+void field_list(Attributes&);  // field_list := ( fixed_part [ ';' variant_part ] | variant_part )
+void fixed_part(Attributes&); // fixed_part := id_list ':' type { ';' id_list ':' type }
+void variant_part(Attributes&); // variant_part := CASE [NAME ':'] TYPE_NAME OF variant { ';' variant }
+void variant(Attributes&);   // variant := case_label_list ':' '(' field_list ')'
+std::vector<Const> case_label_list(); // case_label_list := constant { ',' constant }
+std::shared_ptr<SetType> set_type();        // set_type := SET OF ( simple_type | TYPE_NAME)
+std::shared_ptr<FileType> file_type();       // file_type := FILE [ OF type ]
+std::shared_ptr<PointerType> pointer_type();    // pointer_type := '^' TYPE_NAME
 void procedure_type();  // procedure_type := PROCEDURE [ formal_parameter_list ] 
 void function_type();   // function_type := FUNCTION [ formal_parameter_list ] ':' TYPE_NAME
 void formal_parameter_list(); // formal_parameter_list := '(' formal_parameter_section
@@ -223,11 +223,19 @@ inline std::string name_subrange(char lower,char upper){
 
 std::shared_ptr<SubrangeType> get_subrange(Int lower,Int upper);
 std::shared_ptr<SubrangeType> get_subrange(char lower,char upper);
-std::shared_ptr<EnumType> get_enum(std::vector<std::string> v);
+std::shared_ptr<EnumType> get_enum(const std::vector<std::string> &v);
 std::shared_ptr<ArrayType> get_array(
-  std::vector<std::shared_ptr<Type>> indexTypes,
+  const std::vector<std::shared_ptr<Type>>& indexTypes,
   std::shared_ptr<Type> valueType
-  );
+);
+std::shared_ptr<SetType> get_set(std::shared_ptr<Type> valueType);
+std::shared_ptr<FileType> get_file(std::shared_ptr<Type> valueType);
+std::shared_ptr<PointerType> get_pointer(std::shared_ptr<Type> valueType);
+std::shared_ptr<RecordType> get_record(
+  std::unordered_map<std::string,std::shared_ptr<Type>>&& attributes
+);
+
+void print_type(std::shared_ptr<Type> t,const std::string &name = "");
 
 public:
   std::deque<Info> infos;

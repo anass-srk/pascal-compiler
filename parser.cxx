@@ -34,13 +34,13 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
   return p;
 }
 
-std::shared_ptr<EnumType> Parser::get_enum(std::vector<std::string> v){
+std::shared_ptr<EnumType> Parser::get_enum(const std::vector<std::string>& v){
   std::string name = "_enum";
-  for(auto& s: v){
+  for (auto &s : v){
     name += "_" + s + "_";
   }
-  for(auto &i: infos){
-    if(i.types.contains(name)){
+  for (auto &i : infos){
+    if (i.types.contains(name)){
       return std::dynamic_pointer_cast<EnumType>(i.types[name]);
     }
   }
@@ -55,16 +55,16 @@ std::shared_ptr<EnumType> Parser::get_enum(std::vector<std::string> v){
 }
 
 std::shared_ptr<ArrayType> Parser::get_array(
-  std::vector<std::shared_ptr<Type>> indexTypes,
+  const std::vector<std::shared_ptr<Type>>& indexTypes,
   std::shared_ptr<Type> valueType
   ){
     std::string name = "_arr_";
-    for(auto& t:indexTypes){
+    for (auto &t : indexTypes){
       name += t->name;
     }
     name += valueType->name;
-    for(auto &i: infos){
-      if(i.types.contains(name)){
+    for (auto &i : infos){
+      if (i.types.contains(name)){
         return std::dynamic_pointer_cast<ArrayType>(i.types[name]);
       }
     }
@@ -77,6 +77,67 @@ std::shared_ptr<ArrayType> Parser::get_array(
     infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
     return p;
   }
+
+std::shared_ptr<SetType> Parser::get_set(std::shared_ptr<Type> valueType){
+  std::string name = "_set_" + valueType->name;
+  for(auto &i : infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<SetType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<SetType> p = std::make_shared<SetType>();
+  p->name = std::move(name);
+  p->valueType = valueType;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
+
+std::shared_ptr<FileType> Parser::get_file(std::shared_ptr<Type> valueType){
+  std::string name = "_file_" + valueType->name;
+  for(auto &i : infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<FileType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<FileType> p = std::make_shared<FileType>();
+  p->name = std::move(name);
+  p->valueType = valueType;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
+
+std::shared_ptr<PointerType> Parser::get_pointer(std::shared_ptr<Type> valueType){
+  std::string name = "_pointer_" + valueType->name;
+  for(auto &i : infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<PointerType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<PointerType> p = std::make_shared<PointerType>();
+  p->name = std::move(name);
+  p->valueType = valueType;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
+
+std::shared_ptr<RecordType> Parser::get_record(
+  std::unordered_map<std::string, std::shared_ptr<Type>> &&attributes
+){
+  std::string name = "_record_";
+  for(auto& [_,t] : attributes){
+    name += "_" + t->name + "_";
+  }
+  for(auto& i:infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<RecordType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<RecordType> p = std::make_shared<RecordType>();
+  p->name = std::move(name);
+  p->attributes = std::move(attributes);
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
 
 ///GET ELEMENTS
 
@@ -145,6 +206,7 @@ void Parser::match_adv(TOKEN_TYPE type){
 void Parser::match(TOKEN_TYPE type){
   if (type != lexer.getToken().type){
     println("Error at ", lexer.getToken().line, ':', lexer.getToken().col);
+    println(lexer.getToken().id);
     printf("Expected %s ! Found %s !\n", token_type_name[type].c_str(), token_type_name[lexer.getToken().type].c_str());
     exit(EXIT_FAILURE);
   }
@@ -197,6 +259,71 @@ void Parser::parse(){
   program();
 }
 
+void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
+  print("Type (",name,")","(",t->name,") : ");
+  switch(t->type){
+    case INT_TYPE : println("Integer"); break;
+    case UINT_TYPE : println("Unsigned Integer"); break;
+    case REAL_TYPE : println("Real Number"); break;
+    case BOOLEAN_TYPE :  println("Boolean"); break;
+    case CHAR_TYPE :  println("Character"); break;
+    case CONST_STR_TYPE : println("Constant String (length > 1)"); break;
+    case ENUM_TYPE :  {
+        auto e = std::dynamic_pointer_cast<EnumType>(t);
+        print("( ");
+        for (auto &[id, val] : e->ids){
+          print(id, "(", val, ") ");
+        }
+        println(")");
+        println("*********************************");
+    }break;
+    case SUBRANGE_TYPE :  {
+      auto sub = std::dynamic_pointer_cast<SubrangeType>(t);
+      if(sub->boundsType == INT_TYPE){
+        println("From ",sub->ibounds[0]," to ",sub->ibounds[1]);
+      }else{
+        println("From ", sub->cbounds[0], " to ", sub->cbounds[1]);
+      }
+      println("*********************************");
+    }break;
+    case ARRAY_TYPE : {
+      println("\nIndex Types : ");
+      auto arr_type = std::dynamic_pointer_cast<ArrayType>(t);
+      for(auto &i : arr_type->indexTypes){
+        print_type(i);
+      }
+      println("Value Type : ");
+      print_type(arr_type->valueType);
+      println("*********************************");
+    }break;
+    case RECORD_TYPE : {
+      println("Record Of :");
+      for(auto& att : std::dynamic_pointer_cast<RecordType>(t)->attributes){
+        print("Name : ",att.first);
+        print_type(att.second);
+      }
+    }break;  
+    case SET_TYPE :  {
+      println("Set Of : ");
+      print_type(std::dynamic_pointer_cast<SetType>(t)->valueType);
+      println("*********************************");
+    }break;
+    case FILE_TYPE :  {
+      println("File Of : ");
+      print_type(std::dynamic_pointer_cast<FileType>(t)->valueType);
+      println("*********************************");
+    }break;
+    case POINTER_TYPE : {
+      println("Pointer Of : ");
+      print_type(std::dynamic_pointer_cast<PointerType>(t)->valueType);
+      println("*********************************");
+    }break;
+    case FUNCTION_TYPE :  
+    case VOID_TYPE :  
+    break;
+  }
+}
+
 //Parser Rule
 
 void Parser::program(){
@@ -206,10 +333,15 @@ void Parser::program(){
   lexer.next_sym();
   Info info;
   info.types["int"] = std::make_shared<Type>(INT_TYPE);
+  info.types["int"]->name = "int";
   info.types["uint"] = std::make_shared<Type>(UINT_TYPE);
+  info.types["uint"]->name = "uint";
   info.types["real"] = std::make_shared<Type>(REAL_TYPE);
+  info.types["real"]->name = "real";
   info.types["boolean"] = std::make_shared<Type>(BOOLEAN_TYPE);
+  info.types["boolean"]->name = "boolean";
   info.types["char"] = std::make_shared<Type>(CHAR_TYPE);
+  info.types["char"]->name = "char";
   infos.emplace_front(std::move(info));
   block();
   println("Labels :");
@@ -223,23 +355,7 @@ void Parser::program(){
   }
   println("Types :");
   for(auto& [s,t]:infos[0].types){
-    print("Type (",s,") : ");
-    if(t->type == ENUM_TYPE){
-      auto e = std::dynamic_pointer_cast<EnumType>(t);
-      print("( ");
-      for(auto &[id,val] : e->ids){
-        print(id,"(",val,") ");
-      }
-      print(")");
-    }else if(t->type == SUBRANGE_TYPE){
-      auto sub = std::dynamic_pointer_cast<SubrangeType>(t);
-      if(sub->boundsType == INT_TYPE){
-        print("From ",sub->ibounds[0]," to ",sub->ibounds[1]);
-      }else{
-        print("From ", sub->cbounds[0], " to ", sub->cbounds[1]);
-      }
-    }
-    println();
+    print_type(t,s);
   }
   //match(DOT_TOKEN);
 }
@@ -313,6 +429,7 @@ Const Parser::constant(){
     auto tmp = get_constant(t.id);
     if(!tmp){
       println("No constant with id (",t.id,") exists !");
+      exit(EXIT_FAILURE);
     }
     c = *tmp;
   }else{
@@ -326,12 +443,12 @@ Const Parser::constant(){
         c.value = t.dval;
         break;
       case STRING_LITERAL_TOKEN:
-        c.type = CONST_STR_TYPE;
+        c.type = (t.id.length() == 1 ? CHAR_TYPE : CONST_STR_TYPE);
         c.value = t.id;
         break;
     }
   }
-  if(c.type == CONST_STR_TYPE && (pos || neg)){
+  if((c.type == CONST_STR_TYPE || c.type == CHAR_TYPE) && (pos || neg)){
     println("Cannot use '+' or '-' with a string !");
     exit(EXIT_FAILURE);
   }
@@ -351,9 +468,13 @@ void Parser::type_definition_part(){
   match_adv(ID_TOKEN);
   do{
     std::string name = lexer.getToken().id;
+    quit_if_id_is_used(name);
     match_adv(EQ_TOKEN);
     lexer.next_sym();
-    type();
+    auto t = type();
+    if(t->type != VOID_TYPE){
+      infos[0].types[name] = t;
+    }
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);
 }
@@ -376,9 +497,9 @@ std::shared_ptr<Type> Parser::type(){
     case RECORD_TOKEN:
     case SET_TOKEN:
     case FILE_TOKEN:
-      structured_type();
+      return structured_type();
       break;
-    case POINTER_TOKEN: pointer_type();  break;
+    case POINTER_TOKEN: return std::dynamic_pointer_cast<Type>(pointer_type());  break;
     case PROCEDURE_TOKEN: procedure_type(); break;
     case FUNCTION_TOKEN: function_type(); break;
     // type name
@@ -457,31 +578,27 @@ std::shared_ptr<SubrangeType> Parser::subrange_type(){
   if(lower_bound.type == INT_TYPE){
     return get_subrange(get<Int>(lower_bound.value),get<Int>(upper_bound.value));
   }
-  if(lower_bound.type == CONST_STR_TYPE){
-    if(get<std::string>(lower_bound.value).length() != 1 || get<std::string>(upper_bound.value).length() != 1){
-      println("a subrange is made of 2 chars not strings !");
-      exit(EXIT_FAILURE);
-    }
+  if(lower_bound.type == CHAR_TYPE){
     return get_subrange(get<std::string>(lower_bound.value)[0],get<std::string>(upper_bound.value)[0]);
   }
   println("Cannot create a subrange of something other than chars or ints !");
   exit(EXIT_FAILURE);
 }
 
-void Parser::structured_type(){
+std::shared_ptr<Type> Parser::structured_type(){
   if(lexer.getToken().type == PACKED_TOKEN){
     lexer.next_sym();
   }
-  unpacked_structured_type();
+  return unpacked_structured_type();
 }
 
-void Parser::unpacked_structured_type(){
+std::shared_ptr<Type> Parser::unpacked_structured_type(){
   // TODO : shouldn't add safeguards (default case) ?
   switch(lexer.getToken().type){
-    case ARRAY_TOKEN: array_type(); break;
-    case RECORD_TOKEN: record_type(); break;
-    case SET_TOKEN: set_type(); break;
-    case FILE_TOKEN: file_type(); break;
+    case ARRAY_TOKEN: return std::dynamic_pointer_cast<Type>(array_type()); break;
+    case RECORD_TOKEN: return std::dynamic_pointer_cast<Type>(record_type()); break;
+    case SET_TOKEN: return std::dynamic_pointer_cast<Type>(set_type()); break;
+    case FILE_TOKEN: return std::dynamic_pointer_cast<Type>(file_type()); break;
     default:
       matches({
         ARRAY_TOKEN,
@@ -490,110 +607,190 @@ void Parser::unpacked_structured_type(){
         FILE_TOKEN
       });
   }
+  return std::make_shared<Type>(VOID_TYPE);
 }
 
-void Parser::array_type(){
+std::shared_ptr<ArrayType> Parser::array_type(){
   match(ARRAY_TOKEN);
   match_adv(LB_TOKEN);
+  std::vector<std::shared_ptr<Type>> indexTypes;
   do{
     lexer.next_sym();
-    simple_type();
+    auto tmp = get_type(lexer.getToken().id);
+    if(tmp){
+      switch(tmp->type){
+        case INT_TYPE:
+        case UINT_TYPE:
+        case CHAR_TYPE:
+        case BOOLEAN_TYPE:
+        case ENUM_TYPE:
+        case SUBRANGE_TYPE:
+        break;
+        default: 
+          println("an array index type is either (int,uint,char,boolean,enum,subrange) !"); 
+          exit(EXIT_FAILURE);
+      }
+      lexer.next_sym();
+      indexTypes.emplace_back(tmp);
+    }else{
+      indexTypes.emplace_back(simple_type());
+    }
   }while(lexer.getToken().type == COMMA_TOKEN);
   match(RB_TOKEN);
   match_adv(OF_TOKEN);
   lexer.next_sym();
-  type();
+  return get_array(indexTypes,type());
 }
 
-void Parser::record_type(){
+std::shared_ptr<RecordType> Parser::record_type(){
+  Attributes atts;
   match(RECORD_TOKEN);
   lexer.next_sym();
-  field_list();
+  field_list(atts);
   match(END_TOKEN);
   lexer.next_sym();
+  return get_record(std::move(atts));
 }
 
-void Parser::field_list(){
+void Parser::field_list(Attributes& atts){
   switch(lexer.getToken().type){
     case ID_TOKEN:
-      fixed_part();
+      fixed_part(atts);
       if(lexer.getToken().type == SEMI_TOKEN){
         lexer.next_sym();
-        variant_part();
+        variant_part(atts);
       }else if(lexer.getToken().type == CASE_TOKEN){
-        variant_part();
+        variant_part(atts);
       }
       break;
-    case CASE_TOKEN: variant_part(); break;
+    case CASE_TOKEN: variant_part(atts); break;
     default:
       matches({ID_TOKEN,CASE_TOKEN});
   }
 }
 
-void Parser::fixed_part(){
-  id_list();
+void Parser::fixed_part(Attributes& atts){
+  auto v = id_list();
   match(COLON_TOKEN);
   lexer.next_sym();
-  type();
+  auto t = type();
+  for(auto& s:v){
+    if(atts.contains(s)){
+      println("the record has defined 2 attributes with the same id (",s,") !");
+      exit(EXIT_FAILURE);
+    }
+    atts[s] = t;
+  }
   while(lexer.getToken().type == SEMI_TOKEN && lexer.next_sym().type != CASE_TOKEN){
-    id_list();
+    v = id_list();
     match(COLON_TOKEN);
     lexer.next_sym();
-    type();
+    t = type();
+    for(auto& s:v){
+      if (atts.contains(s)){
+        println("the record has defined 2 attributes with the same id (", s, ") !");
+        exit(EXIT_FAILURE);
+      }
+      atts[s] = t;
+    }
   }
 }
 
-void Parser::variant_part(){
+void Parser::variant_part(Attributes& atts){
   //TODO : Differentiate between var id and type name 
   match(CASE_TOKEN);
-  if(lexer.next_sym().type == ID_TOKEN){
+  std::string name = "tag";
+  if(lexer.next_sym().type == ID_TOKEN && get_type(lexer.getToken().id) == nullptr){
+    name = lexer.getToken().id;
+    if(atts.contains(name)){
+      println("the record has defined 2 attributes with the same id (", name, ") !");
+      exit(EXIT_FAILURE);
+    }
     match_adv(COLON_TOKEN);
   }
   match_adv(ID_TOKEN);
+  auto t = get_type(lexer.getToken().id);
+  if(!t){
+    println("No type name (",lexer.getToken().id,") exists !");
+    exit(EXIT_FAILURE);
+  }
+  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != CHAR_TYPE){
+    println("The tag variable should be either a int, a real or a char !");
+    exit(EXIT_FAILURE);
+  }
+  atts[name] = t;
   match_adv(OF_TOKEN);
   do{
     lexer.next_sym();
-    variant();
+    variant(atts);
   }while(lexer.getToken().type == SEMI_TOKEN);
 }
 
-void Parser::variant(){
+void Parser::variant(Attributes& atts){
   case_label_list();
   match(COLON_TOKEN);
   match_adv(LP_TOKEN);
   lexer.next_sym();
-  field_list();
+  field_list(atts);
   match(RP_TOKEN);
   lexer.next_sym();
 }
 
-void Parser::case_label_list(){
-  constant();
+std::vector<Const> Parser::case_label_list(){
+  std::vector<Const> constants;
+  constants.emplace_back(constant());
   while(lexer.getToken().type == COMMA_TOKEN){
     lexer.next_sym();
-    constant();
+    constants.emplace_back(constant());
   }
+  return constants;
 }
 
-void Parser::set_type(){
+std::shared_ptr<SetType> Parser::set_type(){
   match(SET_TOKEN);
   match_adv(OF_TOKEN);
   lexer.next_sym();
-  type();
-}
-
-void Parser::file_type(){
-  match(FILE_TOKEN);
-  if(lexer.next_sym().type == OF_TOKEN){
+  auto tmp = get_type(lexer.getToken().id);
+  if(tmp){
+    switch(tmp->type){
+      case INT_TYPE:
+      case UINT_TYPE:
+      case CHAR_TYPE:
+      case BOOLEAN_TYPE:
+      case ENUM_TYPE:
+      case SUBRANGE_TYPE:
+      break;
+      default: 
+        println("a set value type is either (int,uint,char,boolean,enum,subrange) !"); 
+        exit(EXIT_FAILURE);
+    }
     lexer.next_sym();
-    type();
+    return get_set(tmp);
+  }else{
+    return get_set(simple_type());
   }
 }
 
-void Parser::pointer_type(){
+std::shared_ptr<FileType> Parser::file_type(){
+  match(FILE_TOKEN);
+  if(lexer.next_sym().type == OF_TOKEN){
+    lexer.next_sym();
+    return get_file(type());
+  }
+  return get_file(get_type("int"));
+}
+
+std::shared_ptr<PointerType> Parser::pointer_type(){
   match(POINTER_TOKEN);
   match_adv(ID_TOKEN);
+  std::string name = lexer.getToken().id;
+  auto t = get_type(name);
+  if(!t){
+    println("No typename (",name,") exists !");
+    exit(EXIT_FAILURE);
+  }
   lexer.next_sym();
+  return get_pointer(t);
 }
 
 void Parser::variable_declaration_part(){

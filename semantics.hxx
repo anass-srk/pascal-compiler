@@ -13,7 +13,7 @@ enum STD_TYPE{
   REAL_TYPE,
   BOOLEAN_TYPE,
   CHAR_TYPE,
-  CONST_STR_TYPE, // For constants only
+  CONST_STR_TYPE, // For constants only (length > 1)
   ENUM_TYPE,
   SUBRANGE_TYPE,
   ARRAY_TYPE,
@@ -57,19 +57,27 @@ struct Const{
   std::variant<Int,double,std::string> value;
 };
 
-struct RecordType : Type {
-  std::unordered_map<std::string,std::shared_ptr<Type>> attributes;
+using Attributes = std::unordered_map<std::string, std::shared_ptr<Type>>;
+struct RecordType : Type
+{
+  Attributes attributes;
+  RecordType() : Type(RECORD_TYPE){}
 };
 
 struct SetType : Type{
-  STD_TYPE type;
+  std::shared_ptr<Type> valueType;
+  SetType() : Type(SET_TYPE){}
 };
 
 struct FileType : Type{
-  std::shared_ptr<Type> type;
+  std::shared_ptr<Type> valueType;
+  FileType() : Type(FILE_TYPE){}
 };
 
-using PointerType = FileType;
+struct PointerType : Type{
+  std::shared_ptr<Type> valueType;
+  PointerType() : Type(POINTER_TYPE) {}
+};
 
 struct Arg{
   std::string id;
@@ -79,7 +87,7 @@ struct Arg{
 
 struct FunctionType : Type{
   std::vector<Arg> args;
-  std::shared_ptr<Type> type;
+  std::shared_ptr<Type> returnType;
 };
 
 struct Label {
@@ -88,7 +96,7 @@ struct Label {
 
 struct Function{
   std::vector<Arg> args;
-  std::shared_ptr<Type> type;
+  std::shared_ptr<Type> returnType;
   std::size_t loc;
 };
 
