@@ -24,8 +24,8 @@ void println(Args &&...args)
   (std::cout << ... << args) << '\n';
 }
 
-typedef long long Int;
-typedef long long UInt;
+using Int = long long;
+using Uint = unsigned long long;
 
 enum LEXER_ERROR{
   LE_INVALID_CHAR,LE_INVALID_NUMBER,LE_LONG_NUMBER,LE_LONG_ID,LE_LONG_STR

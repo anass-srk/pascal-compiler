@@ -183,7 +183,7 @@ void actual_parameter(); // actual_parameter := expression | variable_access | P
 // | FUNCTION_NAME .
 void record_access_(); // record_access_ := '.' variable_access
 void function_parameters_(); // function_parameters_ := '(' [ expression { ',' expression } ] ')'
-void procedure_statement();  // procedure_statement := PROCEDURE_NAME [ actual_parameter_list ]
+void procedure_statement();  // procedure_statement := (PROCEDURE_NAME | 'read' | 'write')  [ actual_parameter_list ]
 void goto_statement(); // goto_statement := GOTO NUMBER
 void structured_statement(); // structured_statement := compound_statement | repetitive_statement
 // | conditional_statement .
