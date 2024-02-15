@@ -139,6 +139,26 @@ std::shared_ptr<RecordType> Parser::get_record(
   return p;
 }
 
+std::shared_ptr<FunctionType> Parser::get_function(const std::vector<Arg> &args, std::shared_ptr<Type> returnType){
+  std::string name = "_function_";
+  for(auto& arg : args){
+    name += "_" ;
+    name += (arg.byRef ? "_var_" : "");
+    name += arg.type->name + "_";
+  }
+  for(auto& i:infos){
+    if(i.types.contains(name)){
+      return std::dynamic_pointer_cast<FunctionType>(i.types[name]);
+    }
+  }
+  std::shared_ptr<FunctionType> p = std::make_shared<FunctionType>();
+  p->name = std::move(name);
+  p->args = args;
+  p->returnType = returnType;
+  infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
+  return p;
+}
+
 ///GET ELEMENTS
 
 Label& Parser::get_label(Int id){
@@ -299,7 +319,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
     case RECORD_TYPE : {
       println("Record Of :");
       for(auto& att : std::dynamic_pointer_cast<RecordType>(t)->attributes){
-        print("Name : ",att.first);
+        print("Name : ",att.first," ");
         print_type(att.second);
       }
     }break;  
@@ -318,7 +338,18 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
       print_type(std::dynamic_pointer_cast<PointerType>(t)->valueType);
       println("*********************************");
     }break;
-    case FUNCTION_TYPE :  
+    case FUNCTION_TYPE : {
+      auto func_type = std::dynamic_pointer_cast<FunctionType>(t);
+      println("Function Of :");
+      println("returnType : ");
+      print_type(func_type->returnType);
+      println("Arguments : ");
+      for(auto& i : func_type->args){
+        println(i.id," By ref ? ",i.byRef);
+        print_type(i.type);
+      }
+      println("*********************************");
+    }break;
     case VOID_TYPE :  
     break;
   }
@@ -342,6 +373,8 @@ void Parser::program(){
   info.types["boolean"]->name = "boolean";
   info.types["char"] = std::make_shared<Type>(CHAR_TYPE);
   info.types["char"]->name = "char";
+  info.types["void"] = std::make_shared<Type>(VOID_TYPE);
+  info.types["void"]->name = "void";
   infos.emplace_front(std::move(info));
   block();
   println("Labels :");
@@ -500,8 +533,8 @@ std::shared_ptr<Type> Parser::type(){
       return structured_type();
       break;
     case POINTER_TOKEN: return std::dynamic_pointer_cast<Type>(pointer_type());  break;
-    case PROCEDURE_TOKEN: procedure_type(); break;
-    case FUNCTION_TOKEN: function_type(); break;
+    case PROCEDURE_TOKEN: return std::dynamic_pointer_cast<Type>(procedure_type()); break;
+    case FUNCTION_TOKEN: return std::dynamic_pointer_cast<Type>(function_type()); break;
     // type name
     case ID_TOKEN: 
       {
@@ -806,43 +839,82 @@ void Parser::variable_declaration_part(){
   
 }
 
-void Parser::procedure_type(){
+std::shared_ptr<FunctionType> Parser::procedure_type(){
+  std::shared_ptr<FunctionType> functionType;
   match(PROCEDURE_TOKEN);
   lexer.next_sym();
   if(lexer.getToken().type == LP_TOKEN){
-    formal_parameter_list();
+    return get_function(formal_parameter_list(),get_type("void"));
   }
+  return get_function(std::vector<Arg>(), get_type("void"));
 }
 
-void Parser::formal_parameter_list(){
+std::vector<Arg> Parser::formal_parameter_list(){
+  std::vector<Arg> args;
   match(LP_TOKEN);
   do{
     lexer.next_sym();
-    formal_parameter_section();
+    formal_parameter_section(args);
   }while(lexer.getToken().type == SEMI_TOKEN);
   match(RP_TOKEN);
   lexer.next_sym();
+  return args;
 }
 
-void Parser::formal_parameter_section(){
+bool args_same_name(const std::vector<Arg>& v,const std::string& s){
+  for(auto& i:v){
+    if(i.id == s){
+      return true;
+    }
+  }
+  return false;
+}
+
+void Parser::formal_parameter_section(std::vector<Arg>& args){
+  Arg arg;
+  arg.byRef = false;
   if(lexer.getToken().type == VAR_TOKEN){
+    arg.byRef = true;
     lexer.next_sym();
   }
-  id_list();
+  auto names = id_list();
   match(COLON_TOKEN);
   match_adv(ID_TOKEN);
+  std::string type_name = lexer.getToken().id;
+  auto t = get_type(type_name);
+  if(!t){
+    println("No type name with id (",type_name,") exists !");
+    exit(EXIT_FAILURE);
+  }
+  arg.type = t;
+  for(auto& s:names){
+    if(args_same_name(args,s)){
+      println("Arguments with the same name ?");
+      exit(EXIT_FAILURE);
+    }
+    arg.id = s;
+    args.push_back(arg);
+  }
   lexer.next_sym();
 }
 
-void Parser::function_type(){
+std::shared_ptr<FunctionType> Parser::function_type(){
+  std::vector<Arg> args;
   match(FUNCTION_TOKEN);
   lexer.next_sym();
   if(lexer.getToken().type == LP_TOKEN){
-    formal_parameter_list();
+    args = formal_parameter_list();
   }
   match(COLON_TOKEN);
   match_adv(ID_TOKEN);
+  std::string type_name = lexer.getToken().id;
+  auto t = get_type(type_name);
+  if(!t){
+    println("No type name with id (",type_name,") exists !");
+    exit(EXIT_FAILURE);
+  }
   lexer.next_sym();
+  return get_function(args,t);
 }
 
 void Parser::procedure_declaration(){

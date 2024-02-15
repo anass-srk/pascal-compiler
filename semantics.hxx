@@ -88,6 +88,7 @@ struct Arg{
 struct FunctionType : Type{
   std::vector<Arg> args;
   std::shared_ptr<Type> returnType;
+  FunctionType() : Type(FUNCTION_TYPE){}
 };
 
 struct Label {

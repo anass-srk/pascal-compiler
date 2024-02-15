@@ -149,11 +149,11 @@ std::vector<Const> case_label_list(); // case_label_list := constant { ',' const
 std::shared_ptr<SetType> set_type();        // set_type := SET OF ( simple_type | TYPE_NAME)
 std::shared_ptr<FileType> file_type();       // file_type := FILE [ OF type ]
 std::shared_ptr<PointerType> pointer_type();    // pointer_type := '^' TYPE_NAME
-void procedure_type();  // procedure_type := PROCEDURE [ formal_parameter_list ] 
-void function_type();   // function_type := FUNCTION [ formal_parameter_list ] ':' TYPE_NAME
-void formal_parameter_list(); // formal_parameter_list := '(' formal_parameter_section
+std::shared_ptr<FunctionType> procedure_type();  // procedure_type := PROCEDURE [ formal_parameter_list ]
+std::shared_ptr<FunctionType> function_type();   // function_type := FUNCTION [ formal_parameter_list ] ':' TYPE_NAME
+std::vector<Arg> formal_parameter_list(); // formal_parameter_list := '(' formal_parameter_section
 // { ';' formal_parameter_section } ')'
-void formal_parameter_section(); // formal_parameter_section := [ VAR ] id_list ':' TYPE_NAME
+void formal_parameter_section(std::vector<Arg> &args); // formal_parameter_section := [ VAR ] id_list ':' TYPE_NAME
 void variable_declaration_part(); // variable_declaration_part := VAR id_list ':' type ';'
 // { id_list ':' type ';' }
 void procedure_declaration(); // procedure_declaration := PROCEDURE NAME [ formal_parameter_list ] ';' block .
@@ -234,6 +234,7 @@ std::shared_ptr<PointerType> get_pointer(std::shared_ptr<Type> valueType);
 std::shared_ptr<RecordType> get_record(
   std::unordered_map<std::string,std::shared_ptr<Type>>&& attributes
 );
+std::shared_ptr<FunctionType> get_function(const std::vector<Arg>& args,std::shared_ptr<Type> returnType);
 
 void print_type(std::shared_ptr<Type> t,const std::string &name = "");
 
