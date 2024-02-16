@@ -4,6 +4,7 @@
 #include <deque>
 #include <vector>
 #include <numeric>
+#include <stack>
 
 constexpr bool debug = true;
 
@@ -50,8 +51,12 @@ enum OP_CODE{
   MULB_OP,
   DIVB_OP,
 
+  ADDS_OP,
+
   MOV_OP,
+  MOVS_OP,
   PUSH_OP,
+  PUSHS_OP,
   PUSH_CONST_OP,
   PUSH_ADDR_OP,
   POP_OP,
@@ -70,7 +75,8 @@ enum OP_CODE{
   CMPU_OP,
   CMPF_OP,
   CMPB_OP,
-  CMPC_OP
+  CMPC_OP,
+  CMPS_OP
 };
 
 union Address{
@@ -78,12 +84,13 @@ union Address{
   size_t s;
 };
 
-enum STD_TYPE {
+enum VM_STD_TYPE {
   UINT_STD,
   INT_STD,
   REAL_STD,
   UCHAR_STD,
-  CHAR_STD
+  CHAR_STD,
+  STRING_STD
 };
 
 union StdType{
@@ -119,15 +126,20 @@ enum FLAG{
   GT_FLAG
 };
 
-struct VM{
+class VM{
+public:
   std::vector<StdType> bytecode;
   std::size_t pc;
   FLAG flag;
+  std::unordered_map<uint,std::string> strings;
+  std::stack<std::string> string_stack;
 
   size_t add_data(StdType data);
   size_t add_inst(OP_CODE instr);
   void run();
-
+  void load_from_file(const std::string& src);
+  void save_to_file(const std::string& dest);
+private:
   void halt_op();
   void push_op();
   void jmp_op();
@@ -137,6 +149,10 @@ struct VM{
   void pop_op();
   void write_op();
   void read_op();
+
+  void pushs_op();
+  void adds_op();
+  void movs_op();
 
   void addu_op();
   void subu_op();
@@ -175,6 +191,8 @@ struct VM{
   void jmpnq_op();
   void jmpgt_op();
   void jmpge_op();
+
+  
 };
 
 #endif

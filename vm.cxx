@@ -12,6 +12,43 @@ size_t VM::add_inst(OP_CODE instr){
   return loc;
 }
 
+void VM::save_to_file(const std::string &dest){
+  FILE *writer = fopen(dest.c_str(),"wb");
+  if(!writer){
+    println("Unable to open file (",dest,") for writing !");
+    exit(EXIT_FAILURE);
+  }
+  size_t size = bytecode.size();
+  if(fwrite(&size,sizeof(size_t),1,writer) == 1){
+    if(fwrite(bytecode.data(),sizeof(StdType),size,writer) == bytecode.size()){
+      fclose(writer);
+      return;
+    }
+  }
+  println("Unable to write to file (", dest, ") !");
+  fclose(writer);
+  exit(EXIT_FAILURE);
+}
+
+void VM::load_from_file(const std::string &src){
+  FILE *reader = fopen(src.c_str(), "rb");
+  if(!reader){
+    println("Unable to open file (",src,") for reading !");
+    exit(EXIT_FAILURE);
+  }
+  size_t size;
+  if(fread(&size,sizeof(size_t),1,reader) == 1){
+    bytecode.resize(size,0);
+    if(fread(bytecode.data(),sizeof(StdType),size,reader) == bytecode.size()){
+      fclose(reader);
+      return;
+    }
+  }
+  println("Unable to read file (", src, ") !");
+  fclose(reader);
+  exit(EXIT_FAILURE);
+}
+
 void VM::run(){
   pc = 0;
   while(pc < bytecode.size()){
@@ -134,7 +171,7 @@ void VM::write_op(){
   Print("WRITE ");
   StdType value = bytecode[bytecode.size()-1];
   bytecode.pop_back();
-  STD_TYPE t = static_cast<STD_TYPE>(bytecode[bytecode.size() - 1].u);
+  VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
   bytecode.pop_back();
   switch(t){
     case INT_STD: println(value.i); break;
@@ -154,7 +191,7 @@ void VM::read_op(){
   Print("READ ");
   uint addr = bytecode[bytecode.size()-1].u;
   bytecode.pop_back();
-  STD_TYPE t = static_cast<STD_TYPE>(bytecode[bytecode.size() - 1].u);
+  VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
   bytecode.pop_back();
   Println("Type (", std_type_names[t], ") ",addr);
   switch(t){
@@ -572,4 +609,15 @@ void VM::jmpge_op(){
   }else{
     ++pc;
   }
+}
+
+/*********************************************************************/
+//Push string
+void pushs_op(){
+  
+}
+
+void VM::adds_op(){
+  Print("ADDS ");
+
 }
