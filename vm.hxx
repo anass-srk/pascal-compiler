@@ -3,6 +3,7 @@
 #include "lexer.hxx"
 #include <deque>
 #include <vector>
+#include <numeric>
 
 constexpr bool debug = true;
 
@@ -59,7 +60,7 @@ enum OP_CODE{
   READ_OP,
 
   JMPLT_OP,
-  JMPLTE_OP,
+  JMPLE_OP,
   JMPEQ_OP,
   JMPNQ_OP,
   JMPGT_OP,
@@ -104,6 +105,12 @@ static const std::string std_type_names[] = {
   "REAL",
   "UCHAR",
   "CHAR"
+};
+
+static const std::string flag_names[] = {
+  "<",
+  "=",
+  ">"
 };
 
 enum FLAG{
@@ -155,7 +162,19 @@ struct VM{
   void subc_op();
   void mulc_op();
   void divc_op();
-};
 
+  void cmpi_op();
+  void cmpu_op();
+  void cmpf_op();
+  void cmpb_op();
+  void cmpc_op();
+
+  void jmple_op();
+  void jmplt_op();
+  void jmpeq_op();
+  void jmpnq_op();
+  void jmpgt_op();
+  void jmpge_op();
+};
 
 #endif

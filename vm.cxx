@@ -50,6 +50,20 @@ void VM::run(){
 
       case WRITE_OP: write_op(); break;
       case READ_OP: read_op(); break;
+      
+      case CMPU_OP: cmpu_op(); break;
+      case CMPI_OP: cmpi_op(); break;
+      case CMPF_OP: cmpf_op(); break;
+      case CMPB_OP: cmpb_op(); break;
+      case CMPC_OP: cmpc_op(); break;
+
+      case JMPLE_OP: jmple_op(); break;
+      case JMPLT_OP: jmplt_op(); break;
+      case JMPEQ_OP: jmpeq_op(); break;
+      case JMPNQ_OP: jmpnq_op(); break;
+      case JMPGT_OP: jmpgt_op(); break;
+      case JMPGE_OP: jmpge_op(); break;
+
       default:
         println("unknown|not-inemplemented bytecode ?");
         exit(EXIT_SUCCESS);
@@ -391,4 +405,171 @@ void VM::divc_op(){
   Println(a," / ",b);
   bytecode.emplace_back(a/b);
   ++pc;
+}
+
+/*********************************************************************/
+
+//compares 2 ints and sets flag
+void VM::cmpi_op(){
+  Print("CMPI ");
+  int b = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  int a = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  Println(a," ",b);
+  if(a == b){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+  ++pc;
+}
+
+//compares 2 uints and sets flag
+void VM::cmpu_op(){
+  Print("CMPU ");
+  uint b = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  uint a = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  Println(a," ",b);
+  if(a == b){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+  ++pc;
+}
+
+//compares 2 floats and sets flag
+void VM::cmpf_op(){
+  Print("CMPF ");
+  float b = bytecode[bytecode.size() - 1].f;
+  bytecode.pop_back();
+  float a = bytecode[bytecode.size() - 1].f;
+  bytecode.pop_back();
+  Println(a," ",b);
+  if(std::abs(a-b) < std::numeric_limits<float>::epsilon()){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+  ++pc;
+}
+
+//compares 2 bytes and sets flag
+void VM::cmpb_op(){
+  Print("CMPB ");
+  u_char b = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  u_char a = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  Println(a," ",b);
+  if(a == b){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+  ++pc;
+}
+
+//compares 2 chars and sets flag
+void VM::cmpc_op(){
+  Print("CMPC ");
+  int b = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  int a = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  Println(a," ",b);
+  if(a == b){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+  ++pc;
+}
+
+/*********************************************************************/
+
+// jump if less than or equals
+void VM::jmple_op(){
+  Print("JMPLE ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag == LT_FLAG || flag == EQ_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+// jump if less than
+void VM::jmplt_op(){
+  Print("JMPLT ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag == LT_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+// jump if equals
+void VM::jmpeq_op(){
+  Print("JMPEQ ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag == EQ_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+// jump if not equals
+void VM::jmpnq_op(){
+  Print("JMPNQ ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag != EQ_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+// jump if greater than
+void VM::jmpgt_op(){
+  Print("JMPGT ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag == GT_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+// jump if greater than or equals
+void VM::jmpge_op(){
+  Print("JMPGE ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," ",flag_names[flag]);
+  if(flag == GT_FLAG || flag == EQ_FLAG){
+    pc = addr;
+  }else{
+    ++pc;
+  }
 }
