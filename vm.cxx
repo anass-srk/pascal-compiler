@@ -676,21 +676,21 @@ uint VM::write_const_string(const std::string &s){
   for(uint i = 0;i < len;++i){
     beg[i] = s[i];
   }
-  //beg[len] = '\0';
+  beg[len] = '\0';
   Println("Writing const string (",beg,") !");
   return loc;
 }
 
 uint VM::get_const_string_taken_cells(size_t len){
   ++len;
-  return len/4 + (len > 4 ? (len % 4 != 0) : 0);
+  return len/4 + (len > 4 ? (len % 4 != 0) : 1);
 }
 
 std::string VM::read_const_string(uint address){
   const uint len = bytecode[address].u;
   const char *beg = ((char*)bytecode.data()) + (address + 1)*sizeof(StdType);
   std::string res(beg);
-  Println("Reading const string (",res,") !");
+  Println("Reading const string (",(int)beg[0],") !");
   return res;
 }
 

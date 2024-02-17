@@ -96,6 +96,79 @@ enum OP_CODE{
   STORE_COMPLEX_OP, // stores complex types (string...) 
 };
 
+static const std::string opcode_names[] = {
+  "NOP_OP",
+  "HALT_OP",
+  "JMP_OP",
+  "RET_OP",
+  "RET_BASIC_OP",
+
+  "ADDI_OP",
+  "SUBI_OP",
+  "MULI_OP",
+  "DIVI_OP",
+  
+  "ADDU_OP",
+  "SUBU_OP",
+  "MULU_OP",
+  "DIVU_OP",
+  
+  "ADDF_OP",
+  "SUBF_OP",
+  "MULF_OP",
+  "DIVF_OP",
+  
+  "ADDC_OP",
+  "SUBC_OP",
+  "MULC_OP",
+  "DIVC_OP",
+  
+  "ADDB_OP",
+  "SUBB_OP",
+  "MULB_OP",
+  "DIVB_OP",
+
+  "ADDS_OP",
+  "GET_STR_CHAR_OP",
+  "SET_STR_CHAR_OP",
+  "GET_STR_LEN_OP",
+
+  "UNION_OP",
+  "INTER_OP",
+  "DIFF_OP",
+  "SYM_DIFF_OP",
+
+  "MOV_OP",
+  "MOVS_OP",    // concerns strings
+  "MOVSET_OP",
+  "PUSH_OP",
+  "PUSHS_OP",
+  "PUSHSET_OP",
+  "PUSH_CONST_OP",
+  "PUSH_ADDR_OP",
+  "POP_OP",   // should take an argument
+
+  "WRITE_OP",
+  "WRITE_STR_OP",
+  "READ_OP",
+
+  "JMPLT_OP",
+  "JMPLE_OP",
+  "JMPEQ_OP",
+  "JMPNQ_OP",
+  "JMPGT_OP",
+  "JMPGE_OP",
+
+  "CMPI_OP",
+  "CMPU_OP",
+  "CMPF_OP",
+  "CMPB_OP",
+  "CMPC_OP",
+  "CMPS_OP",
+
+  "STORE_COMPLEX_OP", // stores complex types (string...) 
+};
+
 union Address{
   uint u[2];
   size_t s;
@@ -173,10 +246,10 @@ private:
   void read_op();
 public:
   uint write_const_string(const std::string& s);
+  std::string read_const_string(uint address);
 private:
   // cell taken by storing the length is not taken into consideration
   uint get_const_string_taken_cells(size_t len);
-  std::string read_const_string(uint address);
   void pushs_op();
   void adds_op();
   void movs_op();

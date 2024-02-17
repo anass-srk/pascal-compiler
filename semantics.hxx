@@ -14,6 +14,7 @@ enum STD_TYPE{
   BOOLEAN_TYPE,
   CHAR_TYPE,
   CONST_STR_TYPE, // For constants only (length > 1)
+  STRING_TYPE,
   ENUM_TYPE,
   SUBRANGE_TYPE,
   ARRAY_TYPE,
@@ -28,6 +29,8 @@ enum STD_TYPE{
 struct Type{
   std::string name = "";
   STD_TYPE type;
+  uint amount = 1;
+  uint size = 1;
   virtual ~Type() = default;
   Type(STD_TYPE t) : type(t){}
 };
@@ -55,11 +58,15 @@ struct ArrayType : Type{
 struct Const{
   STD_TYPE type;
   std::variant<Int,double,std::string> value;
+  uint loc = 0;
+};
+
+struct Var{
+  
 };
 
 using Attributes = std::unordered_map<std::string, std::shared_ptr<Type>>;
-struct RecordType : Type
-{
+struct RecordType : Type{
   Attributes attributes;
   RecordType() : Type(RECORD_TYPE){}
 };
@@ -98,7 +105,7 @@ struct Label {
 struct Function{
   std::vector<Arg> args;
   std::shared_ptr<Type> returnType;
-  std::size_t loc;
+  Function(std::vector<Arg>&& args,std::shared_ptr<Type> returnType) : args(args), returnType(returnType) {} 
 };
 
 struct Info{

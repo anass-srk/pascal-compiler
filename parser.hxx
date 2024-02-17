@@ -6,6 +6,7 @@
 #include <deque>
 #include <optional>
 #include "semantics.hxx"
+#include "vm.hxx"
 
 // program := PROGRAM NAME '(' id_list ')' ';' block '.' 
 // id_list := NAME { ',' NAME } 
@@ -223,7 +224,7 @@ inline std::string name_subrange(char lower,char upper){
 
 std::shared_ptr<SubrangeType> get_subrange(Int lower,Int upper);
 std::shared_ptr<SubrangeType> get_subrange(char lower,char upper);
-std::shared_ptr<EnumType> get_enum(const std::vector<std::string> &v);
+std::shared_ptr<EnumType> get_enum(std::vector<std::string> &&v);
 std::shared_ptr<ArrayType> get_array(
   const std::vector<std::shared_ptr<Type>>& indexTypes,
   std::shared_ptr<Type> valueType
@@ -240,6 +241,7 @@ void print_type(std::shared_ptr<Type> t,const std::string &name = "");
 
 public:
   std::deque<Info> infos;
+  VM vm;
   Parser(Lexer);
   Lexer& getLexer();
   void parse();

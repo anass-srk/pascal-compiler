@@ -3,6 +3,10 @@
 //GET TYPES
 
 std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
+  if(lower >= upper){
+    println("For subrange types (l..u), we should have l < u !");
+    exit(EXIT_FAILURE);
+  }
   std::string name = name_subrange(lower,upper);
   for(auto &i: infos){
     if(i.types.contains(name)){
@@ -14,11 +18,17 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
   p->boundsType = INT_TYPE;
   p->ibounds[0] = lower;
   p->ibounds[1] = upper;
+  p->amount = upper - lower + 1;
+  p->size = 1;
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
 
 std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
+  if(lower >= upper){
+    println("For subrange types (l..u), we should have l < u !");
+    exit(EXIT_FAILURE);
+  }
   std::string name = name_subrange(lower,upper);
   for(auto &i: infos){
     if(i.types.contains(name)){
@@ -30,11 +40,13 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
   p->boundsType = CHAR_TYPE;
   p->cbounds[0] = lower;
   p->cbounds[1] = upper;
+  p->amount = upper - lower + 1;
+  p->size = 1;
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
 
-std::shared_ptr<EnumType> Parser::get_enum(const std::vector<std::string>& v){
+std::shared_ptr<EnumType> Parser::get_enum(std::vector<std::string>&& v){
   std::string name = "_enum";
   for (auto &s : v){
     name += "_" + s + "_";
@@ -48,8 +60,14 @@ std::shared_ptr<EnumType> Parser::get_enum(const std::vector<std::string>& v){
   p->name = std::move(name);
   size_t i = 0;
   for(auto& s:v){
+    if(p->ids.contains(s)){
+      println("Enum with element declared twice (",s,") !");
+      exit(EXIT_FAILURE);
+    }
     p->ids[s] = i++;
   }
+  p->amount = (uint)v.size();
+  p->size = 1;
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
@@ -70,10 +88,13 @@ std::shared_ptr<ArrayType> Parser::get_array(
     }
     std::shared_ptr<ArrayType> p = std::make_shared<ArrayType>();
     p->name = std::move(name);
+    p->amount = 1;
     for(auto& t:indexTypes){
+      p->amount *= t->amount;
       p->indexTypes.emplace_back(t);
     }
     p->valueType = valueType;
+    p->size = p->valueType->size;
     infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
     return p;
   }
@@ -287,6 +308,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
     case REAL_TYPE : println("Real Number"); break;
     case BOOLEAN_TYPE :  println("Boolean"); break;
     case CHAR_TYPE :  println("Character"); break;
+    case STRING_TYPE: println("String"); break;
     case CONST_STR_TYPE : println("Constant String (length > 1)"); break;
     case ENUM_TYPE :  {
         auto e = std::dynamic_pointer_cast<EnumType>(t);
@@ -355,14 +377,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
   }
 }
 
-//Parser Rule
-
-void Parser::program(){
-  match_adv(PROGRAM_TOKEN);
-  match_adv(ID_TOKEN);
-  match_adv(SEMI_TOKEN);
-  lexer.next_sym();
-  Info info;
+void init_info(Info& info){
   info.types["int"] = std::make_shared<Type>(INT_TYPE);
   info.types["int"]->name = "int";
   info.types["uint"] = std::make_shared<Type>(UINT_TYPE);
@@ -373,9 +388,19 @@ void Parser::program(){
   info.types["boolean"]->name = "boolean";
   info.types["char"] = std::make_shared<Type>(CHAR_TYPE);
   info.types["char"]->name = "char";
+  info.types["string"] = std::make_shared<Type>(STRING_TYPE);
+  info.types["string"]->name = "string";
   info.types["void"] = std::make_shared<Type>(VOID_TYPE);
   info.types["void"]->name = "void";
-  infos.emplace_front(std::move(info));
+}
+
+//Parser Rule
+
+void Parser::program(){
+  match_adv(PROGRAM_TOKEN);
+  match_adv(ID_TOKEN);
+  match_adv(SEMI_TOKEN);
+  lexer.next_sym();
   block();
   println("Labels :");
   for(auto& i:infos[0].labels){
@@ -403,6 +428,9 @@ void Parser::block(){
 }
 
 void Parser::declaration_part(){
+  Info info;
+  init_info(info);
+  infos.emplace_front(std::move(info));
   bool in = true;
   while(in){
     switch(lexer.getToken().type){
@@ -415,6 +443,21 @@ void Parser::declaration_part(){
       default: in = false;
     }
   }
+  // Saving constants (int | float | string)
+  vm.add_inst(JMP_OP);
+  uint beg = vm.add_data(0);
+  for(auto &[name,c] : infos[0].constants){
+    switch(c->type){
+      case INT_TYPE: c->loc = vm.add_data((int)std::get<Int>(c->value)); break;
+      case REAL_TYPE: c->loc = vm.add_data((float)std::get<double>(c->value)); break;
+      case STRING_TYPE: c->loc = vm.write_const_string(std::get<std::string>(c->value)); 
+      break;
+      default:
+        println("A constant (",name,") is an int, a real or a string !");
+        exit(EXIT_FAILURE);
+    }
+  }
+  vm.bytecode[beg] = (uint)vm.bytecode.size();
 }
 
 void Parser::label_declaration_part(){
@@ -480,12 +523,12 @@ Const Parser::constant(){
         c.value = t.dval;
         break;
       case STRING_LITERAL_TOKEN:
-        c.type = (t.id.length() == 1 ? CHAR_TYPE : CONST_STR_TYPE);
+        c.type = STRING_TYPE;
         c.value = t.id;
         break;
     }
   }
-  if((c.type == CONST_STR_TYPE || c.type == CHAR_TYPE) && (pos || neg)){
+  if(c.type == STRING_TYPE && (pos || neg)){
     println("Cannot use '+' or '-' with a string !");
     exit(EXIT_FAILURE);
   }
@@ -615,8 +658,13 @@ std::shared_ptr<SubrangeType> Parser::subrange_type(){
   if(lower_bound.type == INT_TYPE){
     return get_subrange(get<Int>(lower_bound.value),get<Int>(upper_bound.value));
   }
-  if(lower_bound.type == CHAR_TYPE){
-    return get_subrange(get<std::string>(lower_bound.value)[0],get<std::string>(upper_bound.value)[0]);
+  if(
+    lower_bound.type == STRING_TYPE &&
+    get<std::string>(lower_bound.value).length() == 1 &&
+    get<std::string>(upper_bound.value).length() == 1
+  )
+  {
+    return get_subrange(get<std::string>(lower_bound.value)[0], get<std::string>(upper_bound.value)[0]);
   }
   println("Cannot create a subrange of something other than chars or ints !");
   exit(EXIT_FAILURE);
@@ -634,8 +682,8 @@ std::shared_ptr<Type> Parser::unpacked_structured_type(){
   switch(lexer.getToken().type){
     case ARRAY_TOKEN: return std::dynamic_pointer_cast<Type>(array_type()); break;
     case RECORD_TOKEN: return std::dynamic_pointer_cast<Type>(record_type()); break;
-    case SET_TOKEN: return std::dynamic_pointer_cast<Type>(set_type()); break;
-    case FILE_TOKEN: return std::dynamic_pointer_cast<Type>(file_type()); break;
+    // case SET_TOKEN: return std::dynamic_pointer_cast<Type>(set_type()); break;
+    // case FILE_TOKEN: return std::dynamic_pointer_cast<Type>(file_type()); break;
     default:
       matches({
         ARRAY_TOKEN,
@@ -644,6 +692,7 @@ std::shared_ptr<Type> Parser::unpacked_structured_type(){
         FILE_TOKEN
       });
   }
+  println("sets and files are not implemented !");
   return std::make_shared<Type>(VOID_TYPE);
 }
 
@@ -656,15 +705,11 @@ std::shared_ptr<ArrayType> Parser::array_type(){
     auto tmp = get_type(lexer.getToken().id);
     if(tmp){
       switch(tmp->type){
-        case INT_TYPE:
-        case UINT_TYPE:
-        case CHAR_TYPE:
-        case BOOLEAN_TYPE:
         case ENUM_TYPE:
         case SUBRANGE_TYPE:
         break;
         default: 
-          println("an array index type is either (int,uint,char,boolean,enum,subrange) !"); 
+          println("an array index type is either (enum,subrange) !"); 
           exit(EXIT_FAILURE);
       }
       lexer.next_sym();
@@ -751,8 +796,8 @@ void Parser::variant_part(Attributes& atts){
     println("No type name (",lexer.getToken().id,") exists !");
     exit(EXIT_FAILURE);
   }
-  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != CHAR_TYPE){
-    println("The tag variable should be either a int, a real or a char !");
+  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != STRING_TYPE){
+    println("The tag variable should be either a int, a real or a string !");
     exit(EXIT_FAILURE);
   }
   atts[name] = t;
@@ -927,24 +972,38 @@ std::shared_ptr<FunctionType> Parser::function_type(){
 void Parser::procedure_declaration(){
   match(PROCEDURE_TOKEN);
   match_adv(ID_TOKEN);
+  std::string name = lexer.getToken().id;
+  quit_if_id_is_used(name);
+  std::vector<Arg> v;
   if(lexer.next_sym().type == LP_TOKEN){
-    formal_parameter_list();
+    v = formal_parameter_list();
   }
   match(SEMI_TOKEN);
   lexer.next_sym();
+  infos[0].functions[name] = std::make_shared<Function>(std::move(v),get_type("void"));
   block();
 }
 
 void Parser::function_declaration(){
   match(FUNCTION_TOKEN);
   match_adv(ID_TOKEN);
+  std::string name = lexer.getToken().id;
+  quit_if_id_is_used(name);
+  std::vector<Arg> v;
   if(lexer.next_sym().type == LP_TOKEN){
-    formal_parameter_list();
+    v = formal_parameter_list();
   }
   match(COLON_TOKEN);
   match_adv(ID_TOKEN);
+  std::string type_name = lexer.getToken().id;
+  auto t = get_type(type_name);
+  if(!t){
+    println("No type name '",type_name,"' exists !");
+    exit(EXIT_FAILURE);
+  }
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
+  infos[0].functions[name] = std::make_shared<Function>(std::move(v),t);
   block();
 }
 
