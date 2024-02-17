@@ -64,8 +64,7 @@ void code1(VM& vm){
 
 // Asks you for your name and then says Hello
 void code2(VM &vm){
-  vm.add_inst(STORE_COMPLEX_OP);
-  uint name = vm.add_data(STRING_STD);
+  uint name = vm.add_inst(STORE_COMPLEX_OP);
   vm.add_inst(JMP_OP);
   uint loc = vm.add_data(0);
   uint wmsg = vm.write_const_string("What's your name ?");
@@ -233,8 +232,7 @@ void code4(VM &vm){
 }
 // a simple string manipulation test
 void code5(VM &vm){
-  vm.add_inst(STORE_COMPLEX_OP);
-  uint str = vm.add_data(STRING_STD);
+  uint str = vm.add_inst(STORE_COMPLEX_OP);
   vm.add_inst(JMP_OP);
   uint loc = vm.add_data(0);
   uint name = vm.write_const_string("Hamid");

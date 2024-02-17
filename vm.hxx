@@ -24,6 +24,7 @@ void Println(Args &&...args){
 };
 
 enum OP_CODE{
+  NOP_OP,
   HALT_OP,
   JMP_OP,
   RET_OP,
@@ -226,6 +227,7 @@ private:
 
   void ret_op();
   void ret_basic_op();
+  void nop_op();
 };
 
 #endif

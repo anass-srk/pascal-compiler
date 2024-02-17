@@ -114,6 +114,7 @@ void VM::run(){
 
       case RET_OP: ret_op(); break;
       case RET_BASIC_OP: ret_basic_op(); break;
+      case NOP_OP: nop_op(); break;
 
       default:
         println("unknown|not-inemplemented bytecode ?");
@@ -125,6 +126,10 @@ void VM::run(){
 void VM::halt_op(){
   exit(EXIT_SUCCESS);
 }
+void VM::nop_op(){
+  ++pc;
+}
+
 // push variable using its address
 void VM::push_op(){
   Print("PUSH ");
@@ -793,14 +798,22 @@ void VM::get_str_len_op(){
 
 void VM::store_complex_op(){
   Print("STORE_COMPLEX ");
-  ++pc;
-  VM_STD_TYPE t = (VM_STD_TYPE)bytecode[pc].u;
-  switch(t){
-    case STRING_STD: strings[pc] = ""; Println("STRING"); break;
-    default:
-      println("STORE_NSTD for strings only ! (so far) ");
-      exit(EXIT_SUCCESS);
-  }
+  // ++pc;
+  // VM_STD_TYPE t = (VM_STD_TYPE)bytecode[pc].u;
+  // switch(t){
+  //   case STRING_STD: strings[pc] = ""; Println("STRING"); break;
+  //   case UINT_STD:
+  //   case INT_STD:
+  //   case REAL_STD:
+  //   case UCHAR_STD:
+  //   case CHAR_STD:
+  //   break;
+  //   default:
+  //     println("STORE_COMPLEX for strings only ! (so far) ");
+  //     exit(EXIT_SUCCESS);
+  // }
+  // ++pc;
+  strings[pc] = "";
   ++pc;
 }
 
