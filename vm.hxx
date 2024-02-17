@@ -6,7 +6,7 @@
 #include <numeric>
 #include <stack>
 
-constexpr bool debug = true;
+constexpr bool debug = false;
 
 template <printable... Args>
 void Print(Args &&...args){
@@ -76,7 +76,9 @@ enum OP_CODE{
   CMPF_OP,
   CMPB_OP,
   CMPC_OP,
-  CMPS_OP
+  CMPS_OP,
+
+  STORE_NSTD_OP, // stores complex types (string...) 
 };
 
 union Address{
@@ -111,7 +113,8 @@ static const std::string std_type_names[] = {
   "INT",
   "REAL",
   "UCHAR",
-  "CHAR"
+  "CHAR",
+  "STRING"
 };
 
 static const std::string flag_names[] = {
@@ -147,9 +150,15 @@ private:
   void push_addr_op();
   void push_const_op();
   void pop_op();
+
   void write_op();
   void read_op();
-
+public:
+  uint write_const_string(const std::string& s);
+private:
+  // cell taken by storing the length is not taken into consideration
+  uint get_const_string_taken_cells(size_t len);
+  std::string read_const_string(uint address);
   void pushs_op();
   void adds_op();
   void movs_op();
@@ -192,7 +201,7 @@ private:
   void jmpgt_op();
   void jmpge_op();
 
-  
+  void store_nstd_op();
 };
 
 #endif

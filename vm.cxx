@@ -101,6 +101,12 @@ void VM::run(){
       case JMPGT_OP: jmpgt_op(); break;
       case JMPGE_OP: jmpge_op(); break;
 
+      case PUSHS_OP: pushs_op(); break;
+      case MOVS_OP: movs_op(); break;
+      case ADDS_OP: adds_op(); break;
+
+      case STORE_NSTD_OP: store_nstd_op(); break;
+
       default:
         println("unknown|not-inemplemented bytecode ?");
         exit(EXIT_SUCCESS);
@@ -174,11 +180,20 @@ void VM::write_op(){
   VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
   bytecode.pop_back();
   switch(t){
-    case INT_STD: println(value.i); break;
-    case REAL_STD: println(value.f); break;
-    case UINT_STD: println(value.u); break;
-    case UCHAR_STD: println(value.c); break;
-    case CHAR_STD: println(value.c); break;
+    case INT_STD: print(value.i); break;
+    case REAL_STD: print(value.f); break;
+    case UINT_STD: print(value.u); break;
+    case UCHAR_STD: print(value.c); break;
+    case CHAR_STD: print(value.c); break;
+    case STRING_STD:{
+      if(value.u == 0){
+        print(string_stack.top());
+        string_stack.pop();
+      }else{
+        println("Writing strings only throught the stack !");
+        exit(EXIT_FAILURE);
+      }
+    }break;
     default:
       println("write not fully implemented !");
       exit(EXIT_FAILURE);
@@ -200,6 +215,16 @@ void VM::read_op(){
     case UINT_STD: std::cin >> bytecode[addr].u; break;
     case UCHAR_STD: std::cin >> bytecode[addr].b; break;
     case CHAR_STD: std::cin >> bytecode[addr].c; break;
+    case STRING_STD:{
+      if(addr == 0){
+        std::string tmp;
+        std::cin >> tmp;
+        string_stack.push(tmp);
+      }else{
+        println("reading strings only throught the stack !");
+        exit(EXIT_FAILURE);
+      }
+    }break;
     default:
       println("read not fully implemented !");
       exit(EXIT_FAILURE);
@@ -612,12 +637,89 @@ void VM::jmpge_op(){
 }
 
 /*********************************************************************/
-//Push string
-void pushs_op(){
-  
+
+// stores const string in the bytecode
+uint VM::write_const_string(const std::string &s){
+  const size_t loc = bytecode.size();
+  uint const len = s.length();
+  add_data((uint)len);
+  const uint n = get_const_string_taken_cells(len);
+  bytecode.resize(bytecode.size() + n,0);
+  char *beg = ((char*)bytecode.data()) + (bytecode.size()-n)*sizeof(StdType);
+  for(uint i = 0;i < len;++i){
+    beg[i] = s[i];
+  }
+  //beg[len] = '\0';
+  Println("Writing const string (",beg,") !");
+  return loc;
 }
 
+uint VM::get_const_string_taken_cells(size_t len){
+  ++len;
+  return len/4 + (len > 4 ? (len % 4 != 0) : 0);
+}
+
+std::string VM::read_const_string(uint address){
+  const uint len = bytecode[address].u;
+  const char *beg = ((char*)bytecode.data()) + (address + 1)*sizeof(StdType);
+  std::string res(beg);
+  Println("Reading const string (",res,") !");
+  return res;
+}
+
+//Push string
+void VM::pushs_op(){
+  Print("PUSHS ");
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr);
+  ++pc;
+  if(strings.contains(addr)){
+    string_stack.push(strings[addr]);
+  }else{
+    std::string tmp = read_const_string(addr);
+    if(addr == pc){
+      // remember the cell storing the length
+      pc += get_const_string_taken_cells(tmp.length()) + 1;
+    }
+    string_stack.push(tmp);
+  }
+}
+
+//Add 2 strings
 void VM::adds_op(){
   Print("ADDS ");
+  ++pc;
+  std::string b = string_stack.top();
+  string_stack.pop();
+  std::string a = string_stack.top();
+  string_stack.pop();
+  Println(a," + ",b);
+  string_stack.push(a+b);
+}
+//Moves a string
+void VM::movs_op(){
+  Print("MOVS ");
+  ++pc;
+  uint dest = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  if(!strings.contains(dest)){
+    println("No string exists with id (",dest,") !");
+    exit(EXIT_FAILURE);
+  }
+  strings[dest] = string_stack.top();
+  string_stack.pop();
+}
 
+void VM::store_nstd_op(){
+  Print("STORE_NSTD ");
+  ++pc;
+  VM_STD_TYPE t = (VM_STD_TYPE)bytecode[pc].u;
+  switch(t){
+    case STRING_STD: strings[pc] = ""; break;
+    default:
+      println("STORE_NSTD for strings only ! (so far) ");
+      exit(EXIT_SUCCESS);
+  }
+  ++pc;
 }
