@@ -105,7 +105,10 @@ void VM::run(){
       case MOVS_OP: movs_op(); break;
       case ADDS_OP: adds_op(); break;
 
-      case STORE_NSTD_OP: store_nstd_op(); break;
+      case STORE_COMPLEX_OP: store_complex_op(); break;
+
+      case RET_OP: ret_op(); break;
+      case RET_BASIC_OP: ret_basic_op(); break;
 
       default:
         println("unknown|not-inemplemented bytecode ?");
@@ -175,9 +178,9 @@ void VM::pop_op(){
 // write operand 
 void VM::write_op(){
   Print("WRITE ");
-  StdType value = bytecode[bytecode.size()-1];
-  bytecode.pop_back();
   VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
+  bytecode.pop_back();
+  StdType value = bytecode[bytecode.size() - 1];
   bytecode.pop_back();
   switch(t){
     case INT_STD: print(value.i); break;
@@ -204,9 +207,9 @@ void VM::write_op(){
 // read to operand address 
 void VM::read_op(){
   Print("READ ");
-  uint addr = bytecode[bytecode.size()-1].u;
-  bytecode.pop_back();
   VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
+  bytecode.pop_back();
+  uint addr = bytecode[bytecode.size()-1].u;
   bytecode.pop_back();
   Println("Type (", std_type_names[t], ") ",addr);
   switch(t){
@@ -711,15 +714,38 @@ void VM::movs_op(){
   string_stack.pop();
 }
 
-void VM::store_nstd_op(){
-  Print("STORE_NSTD ");
+/*********************************************************************/
+
+void VM::store_complex_op(){
+  Print("STORE_COMPLEX ");
   ++pc;
   VM_STD_TYPE t = (VM_STD_TYPE)bytecode[pc].u;
   switch(t){
-    case STRING_STD: strings[pc] = ""; break;
+    case STRING_STD: strings[pc] = ""; Println("STRING"); break;
     default:
       println("STORE_NSTD for strings only ! (so far) ");
       exit(EXIT_SUCCESS);
   }
   ++pc;
+}
+
+/*********************************************************************/
+
+void VM::ret_op(){
+  Print("RET to ");
+  uint addr = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  Println(addr);
+  pc = addr;
+}
+
+void VM::ret_basic_op(){
+  Print("RET_BASIC to ");
+  uint val = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  uint addr = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  Println(addr," the value ",val);
+  pc = addr;
+  bytecode.emplace_back(val);
 }

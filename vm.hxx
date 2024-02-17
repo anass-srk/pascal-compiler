@@ -6,7 +6,7 @@
 #include <numeric>
 #include <stack>
 
-constexpr bool debug = false;
+constexpr bool debug = true;
 
 template <printable... Args>
 void Print(Args &&...args){
@@ -25,6 +25,8 @@ void Println(Args &&...args){
 enum OP_CODE{
   HALT_OP,
   JMP_OP,
+  RET_OP,
+  RET_BASIC_OP,
 
   ADDI_OP,
   SUBI_OP,
@@ -78,7 +80,7 @@ enum OP_CODE{
   CMPC_OP,
   CMPS_OP,
 
-  STORE_NSTD_OP, // stores complex types (string...) 
+  STORE_COMPLEX_OP, // stores complex types (string...) 
 };
 
 union Address{
@@ -201,7 +203,10 @@ private:
   void jmpgt_op();
   void jmpge_op();
 
-  void store_nstd_op();
+  void store_complex_op();
+
+  void ret_op();
+  void ret_basic_op();
 };
 
 #endif
