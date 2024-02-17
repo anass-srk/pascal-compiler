@@ -86,6 +86,7 @@ void VM::run(){
       case DIVC_OP: divc_op(); break;
 
       case WRITE_OP: write_op(); break;
+      case WRITE_STR_OP: write_str_op(); break;
       case READ_OP: read_op(); break;
       
       case CMPU_OP: cmpu_op(); break;
@@ -104,6 +105,10 @@ void VM::run(){
       case PUSHS_OP: pushs_op(); break;
       case MOVS_OP: movs_op(); break;
       case ADDS_OP: adds_op(); break;
+      case GET_STR_CHAR_OP: get_str_char_op(); break;
+      case GET_STR_LEN_OP: get_str_len_op(); break;
+      case SET_STR_CHAR_OP: set_str_char_op(); break;
+      case CMPS_OP: cmps_op(); break;
 
       case STORE_COMPLEX_OP: store_complex_op(); break;
 
@@ -170,9 +175,15 @@ void VM::mov_op(){
 }
 // why though ?
 void VM::pop_op(){
-  Print("POP ");
-  Println(bytecode[bytecode.size()-1].u);
+  Print("POP type ");
+  VM_STD_TYPE t = (VM_STD_TYPE)bytecode[bytecode.size()-1].u;
   bytecode.pop_back();
+  Print(std_type_names[t]," , ",bytecode[bytecode.size()-1].u);
+  switch(t){
+    case STRING_STD: string_stack.pop(); break;
+    default:
+      bytecode.pop_back();
+  }
   ++pc;
 }
 // write operand 
@@ -204,6 +215,14 @@ void VM::write_op(){
   }
   ++pc;
 }
+// write string fro stack
+void VM::write_str_op(){
+  Print("WRITE_STR ");
+  print(string_stack.top());
+  string_stack.pop();
+  ++pc;
+}
+
 // read to operand address 
 void VM::read_op(){
   Print("READ ");
@@ -712,6 +731,62 @@ void VM::movs_op(){
   }
   strings[dest] = string_stack.top();
   string_stack.pop();
+}
+
+//compare 2 strings
+void VM::cmps_op(){
+  Print("CMPS ");
+  ++pc;
+  std::string b = string_stack.top();
+  string_stack.pop();
+  std::string a = string_stack.top();
+  string_stack.pop();
+  Println(a," ",b);
+  if(a == b){
+    flag = EQ_FLAG;
+  }else if(a > b){
+    flag = GT_FLAG;
+  }else{
+    flag = LT_FLAG;
+  }
+}
+// Get string char at i
+void VM::get_str_char_op(){
+  Print("GET_STR_CHAR at ");
+  ++pc;
+  uint i = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  std::string s = string_stack.top();
+  string_stack.pop();
+  Println(i,"from ",s);
+  bytecode.emplace_back(s[i]);
+}
+// Set string char at i
+void VM::set_str_char_op(){
+  Print("SET_STR_CHAR ");
+  ++pc;
+  uint i = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  uint addr = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  char c = bytecode[bytecode.size() - 1].c;
+  bytecode.pop_back();
+  if(!strings.contains(addr)){
+    println("No string with id (",addr,") exists !");
+    exit(EXIT_FAILURE);
+  }
+  Println(i, " of string '", strings[addr], "' to ", c);
+  strings[addr][i] = c;
+}
+// GET string len
+void VM::get_str_len_op(){
+  Print("GET_STR_LEN of ");
+  ++pc;
+  std::string str = string_stack.top();
+  string_stack.pop();
+  uint const len = (uint)str.length();
+  Println(str," which is ",len);
+  bytecode.emplace_back((uint)len);
 }
 
 /*********************************************************************/

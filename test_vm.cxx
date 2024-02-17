@@ -7,11 +7,12 @@ void code1(VM& vm);
 void code2(VM& vm);
 void code3(VM& vm);
 void code4(VM &vm);
+void code5(VM& vm);
 
 int main(){
   VM vm;
   // vm.load_from_file("prog.bin");
-  code4(vm);
+  code5(vm);
   vm.run();
   // vm.save_to_file("prog.bin");
 }
@@ -162,7 +163,7 @@ void code3(VM &vm){
 
   vm.add_inst(HALT_OP);
 }
-
+// prompts user to enter 2 numbers, calls function to add them and prints result
 void code4(VM &vm){
   vm.add_inst(JMP_OP);
   uint loc = vm.add_data(0);
@@ -226,6 +227,49 @@ void code4(VM &vm){
 
   vm.add_inst(PUSH_CONST_OP);
   vm.add_data(INT_STD);
+  vm.add_inst(WRITE_OP);
+
+  vm.add_inst(HALT_OP);
+}
+// a simple string manipulation test
+void code5(VM &vm){
+  vm.add_inst(STORE_COMPLEX_OP);
+  uint str = vm.add_data(STRING_STD);
+  vm.add_inst(JMP_OP);
+  uint loc = vm.add_data(0);
+  uint name = vm.write_const_string("Hamid");
+  vm.bytecode[loc] = (uint)vm.bytecode.size();
+
+  vm.add_inst(PUSHS_OP);
+  vm.add_data(name);
+
+  vm.add_inst(PUSH_ADDR_OP);
+  vm.add_data(str);
+  vm.add_inst(MOVS_OP);
+
+  vm.add_inst(PUSHS_OP);
+  vm.add_data(str);
+
+  vm.add_inst(WRITE_STR_OP);
+
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data('W');
+  vm.add_inst(PUSH_ADDR_OP);
+  vm.add_data(str);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(0);
+  vm.add_inst(SET_STR_CHAR_OP);
+
+  vm.add_inst(PUSHS_OP);
+  vm.add_data(str);
+  vm.add_inst(WRITE_STR_OP);
+
+  vm.add_inst(PUSHS_OP);
+  vm.add_data(str);
+  vm.add_inst(GET_STR_LEN_OP);
+
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(UINT_STD);
   vm.add_inst(WRITE_OP);
 
   vm.add_inst(HALT_OP);

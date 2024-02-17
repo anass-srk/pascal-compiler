@@ -5,6 +5,7 @@
 #include <vector>
 #include <numeric>
 #include <stack>
+#include <set>
 
 constexpr bool debug = true;
 
@@ -54,16 +55,27 @@ enum OP_CODE{
   DIVB_OP,
 
   ADDS_OP,
+  GET_STR_CHAR_OP,
+  SET_STR_CHAR_OP,
+  GET_STR_LEN_OP,
+
+  UNION_OP,
+  INTER_OP,
+  DIFF_OP,
+  SYM_DIFF_OP,
 
   MOV_OP,
-  MOVS_OP,
+  MOVS_OP,    // concerns strings
+  MOVSET_OP,
   PUSH_OP,
   PUSHS_OP,
+  PUSHSET_OP,
   PUSH_CONST_OP,
   PUSH_ADDR_OP,
-  POP_OP,
+  POP_OP,   // should take an argument
 
   WRITE_OP,
+  WRITE_STR_OP,
   READ_OP,
 
   JMPLT_OP,
@@ -138,6 +150,8 @@ public:
   FLAG flag;
   std::unordered_map<uint,std::string> strings;
   std::stack<std::string> string_stack;
+  std::unordered_map<uint,std::set<StdType>> sets;
+  std::stack<std::set<StdType>> set_stack;
 
   size_t add_data(StdType data);
   size_t add_inst(OP_CODE instr);
@@ -154,6 +168,7 @@ private:
   void pop_op();
 
   void write_op();
+  void write_str_op();
   void read_op();
 public:
   uint write_const_string(const std::string& s);
@@ -164,6 +179,10 @@ private:
   void pushs_op();
   void adds_op();
   void movs_op();
+  void cmps_op();
+  void get_str_char_op();
+  void set_str_char_op();
+  void get_str_len_op();
 
   void addu_op();
   void subu_op();
