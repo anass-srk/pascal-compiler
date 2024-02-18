@@ -29,7 +29,6 @@ enum STD_TYPE{
 struct Type{
   std::string name = "";
   STD_TYPE type;
-  uint amount = 1;
   uint size = 1;
   virtual ~Type() = default;
   Type(STD_TYPE t) : type(t){}
@@ -37,11 +36,13 @@ struct Type{
 
 struct EnumType : Type{
   std::unordered_map<std::string,Int> ids;
+  uint amount = 1;
   EnumType() : Type(ENUM_TYPE) {}
 };
 
 struct SubrangeType : Type{
   STD_TYPE boundsType;
+  uint amount = 1;
   union{
     Int ibounds[2];
     char cbounds[2];
@@ -52,6 +53,8 @@ struct SubrangeType : Type{
 struct ArrayType : Type{
   std::vector<std::shared_ptr<Type>> indexTypes;
   std::shared_ptr<Type> valueType;
+  uint amount = 0;
+  uint elem_size = 1;
   ArrayType() : Type(ARRAY_TYPE) {}
 };
 
@@ -62,10 +65,13 @@ struct Const{
 };
 
 struct Var{
-  
+  std::shared_ptr<Type> type;
+  uint loc = 0;
+  Var(std::shared_ptr<Type> type) : type(type) {}
+  Var(){}
 };
 
-using Attributes = std::unordered_map<std::string, std::shared_ptr<Type>>;
+using Attributes = std::unordered_map<std::string, Var>;
 struct RecordType : Type{
   Attributes attributes;
   RecordType() : Type(RECORD_TYPE){}
@@ -112,7 +118,7 @@ struct Info{
   std::unordered_map<Int,Label> labels;
   std::unordered_map<std::string,std::shared_ptr<Const>> constants;
   std::unordered_map<std::string,std::shared_ptr<Type>> types;
-  std::unordered_map<std::string,std::shared_ptr<Type>> variables; 
+  std::unordered_map<std::string,std::shared_ptr<Var>> variables; 
   std::unordered_map<std::string,std::shared_ptr<Function>> functions;
 };
 

@@ -233,11 +233,15 @@ std::shared_ptr<SetType> get_set(std::shared_ptr<Type> valueType);
 std::shared_ptr<FileType> get_file(std::shared_ptr<Type> valueType);
 std::shared_ptr<PointerType> get_pointer(std::shared_ptr<Type> valueType);
 std::shared_ptr<RecordType> get_record(
-  std::unordered_map<std::string,std::shared_ptr<Type>>&& attributes
+  std::unordered_map<std::string,Var>&& attributes
 );
 std::shared_ptr<FunctionType> get_function(const std::vector<Arg>& args,std::shared_ptr<Type> returnType);
 
 void print_type(std::shared_ptr<Type> t,const std::string &name = "");
+
+void store_constants();
+void store_variables();
+uint store_variable(std::shared_ptr<Type> t);
 
 public:
   std::deque<Info> infos;

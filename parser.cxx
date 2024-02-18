@@ -90,11 +90,19 @@ std::shared_ptr<ArrayType> Parser::get_array(
     p->name = std::move(name);
     p->amount = 1;
     for(auto& t:indexTypes){
-      p->amount *= t->amount;
+      // p->amount *= t->amount;
+      switch(t->type){
+        case ENUM_TYPE: p->amount *= std::dynamic_pointer_cast<EnumType>(t)->amount; break;
+        case SUBRANGE_TYPE: p->amount *= std::dynamic_pointer_cast<SubrangeType>(t)->amount; break;
+        default:
+          println("An array indexing type is an enum or a subrange !");
+          exit(EXIT_FAILURE);
+      }
       p->indexTypes.emplace_back(t);
     }
     p->valueType = valueType;
-    p->size = p->valueType->size;
+    p->elem_size = p->valueType->size;
+    p->size = p->amount * p->elem_size;
     infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
     return p;
   }
@@ -137,16 +145,17 @@ std::shared_ptr<PointerType> Parser::get_pointer(std::shared_ptr<Type> valueType
   std::shared_ptr<PointerType> p = std::make_shared<PointerType>();
   p->name = std::move(name);
   p->valueType = valueType;
+  p->size = 1;
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
 
 std::shared_ptr<RecordType> Parser::get_record(
-  std::unordered_map<std::string, std::shared_ptr<Type>> &&attributes
+  std::unordered_map<std::string, Var> &&attributes
 ){
   std::string name = "_record_";
   for(auto& [_,t] : attributes){
-    name += "_" + t->name + "_";
+    name += "_" + t.type->name + "_";
   }
   for(auto& i:infos){
     if(i.types.contains(name)){
@@ -156,6 +165,11 @@ std::shared_ptr<RecordType> Parser::get_record(
   std::shared_ptr<RecordType> p = std::make_shared<RecordType>();
   p->name = std::move(name);
   p->attributes = std::move(attributes);
+  p->size = 0;
+  for(auto &[_,t] : p->attributes){
+    t.loc = p->size;
+    p->size += t.type->size;
+  }
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
 }
@@ -341,8 +355,8 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
     case RECORD_TYPE : {
       println("Record Of :");
       for(auto& att : std::dynamic_pointer_cast<RecordType>(t)->attributes){
-        print("Name : ",att.first," ");
-        print_type(att.second);
+        print("Name : ",att.first," at ",att.second.loc," ");
+        print_type(att.second.type);
       }
     }break;  
     case SET_TYPE :  {
@@ -415,9 +429,10 @@ void Parser::program(){
   for(auto& [s,t]:infos[0].types){
     print_type(t,s);
   }
+  println("Vars :");
   for(auto& [s,t] : infos[0].variables){
-    println("var (",s,")");
-    print_type(t);
+    println("var (",s,") at ",t->loc," ");
+    print_type(t->type);
   }
   //match(DOT_TOKEN);
 }
@@ -425,6 +440,66 @@ void Parser::program(){
 void Parser::block(){
   declaration_part();
   statement_part();
+}
+
+void Parser::store_constants(){
+  vm.add_inst(JMP_OP);
+  uint beg = vm.add_data(0);
+  for(auto &[name,c] : infos[0].constants){
+    switch(c->type){
+      case INT_TYPE: c->loc = vm.add_data((int)std::get<Int>(c->value)); break;
+      case REAL_TYPE: c->loc = vm.add_data((float)std::get<double>(c->value)); break;
+      case STRING_TYPE: c->loc = vm.write_const_string(std::get<std::string>(c->value)); break;
+      default:
+        println("A constant (",name,") is an int, a real or a string !");
+        exit(EXIT_FAILURE);
+    }
+    println("Loc of '",name,"' is ",c->loc);
+  }
+  vm.bytecode[beg] = (uint)vm.bytecode.size();
+}
+
+uint Parser::store_variable(std::shared_ptr<Type> t){
+  switch(t->type){
+    case INT_TYPE:
+    case UINT_TYPE:
+    case REAL_TYPE:
+    case CHAR_TYPE:
+    case BOOLEAN_TYPE:
+    case ENUM_TYPE:
+    case SUBRANGE_TYPE:
+    case POINTER_TYPE:
+      return vm.add_inst(NOP_OP);
+      break;
+    case STRING_TYPE:
+      return vm.add_inst(STORE_COMPLEX_OP);
+      break;
+    case ARRAY_TYPE:{
+      auto arr_type = std::dynamic_pointer_cast<ArrayType>(t);
+      uint loc = store_variable(arr_type->valueType);
+      for(uint i = 1;i < arr_type->amount;++i){
+        store_variable(arr_type->valueType);
+      }
+      return loc;
+    }break;
+    case RECORD_TYPE:{
+      auto record_type = std::dynamic_pointer_cast<RecordType>(t);
+      uint loc = (uint)vm.bytecode.size();
+      for(auto &[name,v] : record_type->attributes){
+        store_variable(v.type);
+      }
+      return loc;
+    }break;
+    default:
+      println("Cannot create variables as sets or files !");
+      exit(EXIT_FAILURE);
+  }
+}
+
+void Parser::store_variables(){
+  for(auto &[_,v] : infos[0].variables){
+    v->loc = store_variable(v->type);
+  }
 }
 
 void Parser::declaration_part(){
@@ -443,21 +518,12 @@ void Parser::declaration_part(){
       default: in = false;
     }
   }
+
   // Saving constants (int | float | string)
-  vm.add_inst(JMP_OP);
-  uint beg = vm.add_data(0);
-  for(auto &[name,c] : infos[0].constants){
-    switch(c->type){
-      case INT_TYPE: c->loc = vm.add_data((int)std::get<Int>(c->value)); break;
-      case REAL_TYPE: c->loc = vm.add_data((float)std::get<double>(c->value)); break;
-      case STRING_TYPE: c->loc = vm.write_const_string(std::get<std::string>(c->value)); 
-      break;
-      default:
-        println("A constant (",name,") is an int, a real or a string !");
-        exit(EXIT_FAILURE);
-    }
-  }
-  vm.bytecode[beg] = (uint)vm.bytecode.size();
+  store_constants();
+  // Saving variables
+  store_variables();
+  vm.save_to_file("_.bin");
 }
 
 void Parser::label_declaration_part(){
@@ -761,6 +827,7 @@ void Parser::fixed_part(Attributes& atts){
       println("the record has defined 2 attributes with the same id (",s,") !");
       exit(EXIT_FAILURE);
     }
+    // atts.insert(std::pair<std::string,Var>(s,t));
     atts[s] = t;
   }
   while(lexer.getToken().type == SEMI_TOKEN && lexer.next_sym().type != CASE_TOKEN){
@@ -885,7 +952,7 @@ void Parser::variable_declaration_part(){
     auto t = type();
     for(auto& name : names){
       quit_if_id_is_used(name);
-      infos[0].variables[name] = t;
+      infos[0].variables[name] = std::make_shared<Var>(t);
     }
     match(SEMI_TOKEN);
   }while(lexer.next_sym().type == ID_TOKEN);

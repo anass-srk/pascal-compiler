@@ -683,7 +683,7 @@ uint VM::write_const_string(const std::string &s){
 
 uint VM::get_const_string_taken_cells(size_t len){
   ++len;
-  return len/4 + (len > 4 ? (len % 4 != 0) : 1);
+  return len/4 + (len >= 4 ? (len % 4 != 0) : 1);
 }
 
 std::string VM::read_const_string(uint address){
