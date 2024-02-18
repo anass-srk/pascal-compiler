@@ -15,7 +15,7 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
   }
   std::shared_ptr<SubrangeType> p = std::make_shared<SubrangeType>();
   p->name = std::move(name);
-  p->boundsType = INT_TYPE;
+  p->boundsType = get_type("int");
   p->ibounds[0] = lower;
   p->ibounds[1] = upper;
   p->amount = upper - lower + 1;
@@ -37,7 +37,7 @@ std::shared_ptr<SubrangeType> Parser::get_subrange(char lower,char upper){
   }
   std::shared_ptr<SubrangeType> p = std::make_shared<SubrangeType>();
   p->name = std::move(name);
-  p->boundsType = CHAR_TYPE;
+  p->boundsType = get_type("char");
   p->cbounds[0] = lower;
   p->cbounds[1] = upper;
   p->amount = upper - lower + 1;
@@ -213,9 +213,14 @@ void Parser::quit_if_label_id_used(Int id){
 }
 
 void Parser::quit_if_id_is_used(const std::string& id){
+  if(program_name == id){
+    println("The id (", id, ") is already taken !");
+    exit(EXIT_FAILURE);
+  }
   for(auto& [_,t] : infos[0].types){
     if(t->type == ENUM_TYPE && std::dynamic_pointer_cast<EnumType>(t)->ids.contains(id)){
-      return;
+      println("The id (", id, ") is already taken !");
+      exit(EXIT_FAILURE);
     }
   }
   if(
@@ -335,7 +340,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
     }break;
     case SUBRANGE_TYPE :  {
       auto sub = std::dynamic_pointer_cast<SubrangeType>(t);
-      if(sub->boundsType == INT_TYPE){
+      if(sub->boundsType == get_type("int")){
         println("From ",sub->ibounds[0]," to ",sub->ibounds[1]);
       }else{
         println("From ", sub->cbounds[0], " to ", sub->cbounds[1]);
@@ -386,8 +391,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
       }
       println("*********************************");
     }break;
-    case VOID_TYPE :  
-    break;
+    case VOID_TYPE :  println("Void"); break;
   }
 }
 
@@ -408,14 +412,7 @@ void init_info(Info& info){
   info.types["void"]->name = "void";
 }
 
-//Parser Rule
-
-void Parser::program(){
-  match_adv(PROGRAM_TOKEN);
-  match_adv(ID_TOKEN);
-  match_adv(SEMI_TOKEN);
-  lexer.next_sym();
-  block();
+void Parser::show_declarations(){
   println("Labels :");
   for(auto& i:infos[0].labels){
     println(i.first);
@@ -430,10 +427,27 @@ void Parser::program(){
     print_type(t,s);
   }
   println("Vars :");
-  for(auto& [s,t] : infos[0].variables){
-    println("var (",s,") at ",t->loc," ");
-    print_type(t->type);
+  for(auto& [s,v] : infos[0].variables){
+    println("var (",s,") at ",v->loc," ");
+    print_type(v->type);
   }
+  println("Functions : ");
+  for(auto &[s,v] : infos[0].functions){
+    println("Function name '",s,"' with type :");
+    print_type(v->type);
+  }
+}
+
+//Parser Rule
+
+void Parser::program(){
+  match_adv(PROGRAM_TOKEN);
+  match_adv(ID_TOKEN);
+  program_name = lexer.getToken().id;
+  match_adv(SEMI_TOKEN);
+  lexer.next_sym();
+  block();
+  //show_declarations();
   //match(DOT_TOKEN);
 }
 
@@ -523,7 +537,7 @@ void Parser::declaration_part(){
   store_constants();
   // Saving variables
   store_variables();
-  vm.save_to_file("_.bin");
+  // vm.save_to_file("_.bin");
 }
 
 void Parser::label_declaration_part(){
@@ -1047,8 +1061,10 @@ void Parser::procedure_declaration(){
   }
   match(SEMI_TOKEN);
   lexer.next_sym();
-  infos[0].functions[name] = std::make_shared<Function>(std::move(v),get_type("void"));
+  infos[0].functions[name] = std::make_shared<Var>(get_function(v,get_type("void")));
   block();
+  show_declarations();
+  infos.pop_front();
 }
 
 void Parser::function_declaration(){
@@ -1070,72 +1086,392 @@ void Parser::function_declaration(){
   }
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
-  infos[0].functions[name] = std::make_shared<Function>(std::move(v),t);
+  infos[0].functions[name] = std::make_shared<Var>(get_function(v,t));
   block();
+  infos.pop_front();
 }
 
-void Parser::expression(){
-  simple_expression();
+std::shared_ptr<Type> Parser::expression(){
+  auto type_a = simple_expression();
   switch(lexer.getToken().type){
-    case EQ_TOKEN:
-    case NEQ_TOKEN:
-    case LT_TOKEN:
-    case LE_TOKEN:
-    case GT_TOKEN:
-    case GE_TOKEN:
-    case IN_TOKEN:
+    case EQ_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)EQ_FLAG);
       lexer.next_sym();
-      simple_expression();
-      break;
-    default: return;
-  }
-}
-
-void Parser::simple_expression(){
-  switch(lexer.getToken().type){
-    case PLUS_TOKEN:
-    case MINUS_TOKEN:
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
+    case NEQ_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)NE_FLAG);
       lexer.next_sym();
-      break;
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
+    case LT_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)LT_FLAG);
+      lexer.next_sym();
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
+    case LE_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)LE_FLAG);
+      lexer.next_sym();
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
+    case GT_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)GT_FLAG);
+      lexer.next_sym();
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
+    case GE_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)GE_FLAG);
+      lexer.next_sym();
+      auto type_b = simple_expression();
+      check_store_comparison(type_a,type_b);
+    }break;
     default: break;
   }
-  term();
+  return type_a;
+}
+
+void Parser::check_store_comparison(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
+  if(a->type == SUBRANGE_TYPE){
+    check_store_comparison(std::dynamic_pointer_cast<SubrangeType>(a)->boundsType,b);
+    return;
+  }
+  if(b->type == SUBRANGE_TYPE){
+    check_store_comparison(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType);
+    return;
+  }
+  if(a->type == INT_TYPE && b->type == INT_TYPE){
+    vm.add_inst(TESTI_OP);
+    return;
+  }
+  if(a->type == UINT_TYPE && b->type == UINT_TYPE){
+    vm.add_inst(TESTU_OP);
+    return;
+  }
+  if(a->type == REAL_TYPE && b->type == REAL_TYPE){
+    vm.add_inst(TESTF_OP);
+    return;
+  }
+  if (a->type == BOOLEAN_TYPE && b->type == BOOLEAN_TYPE){
+    vm.add_inst(TESTB_OP);
+    return;
+  }
+  if(a->type == CHAR_TYPE && b->type == CHAR_TYPE){
+    vm.add_inst(TESTC_OP);
+    return;
+  }
+  if(a->type == STRING_TYPE && b->type == STRING_TYPE){
+    vm.add_inst(TESTS_OP);
+    return;
+  }
+  if(a->type == ENUM_TYPE && b->type == ENUM_TYPE){
+    if(a != b){
+      println("Cannot compare values of 2 different enums !");
+      exit(EXIT_FAILURE);
+    }
+    vm.add_inst(TESTI_OP);
+    return;
+  }
+  println("Unsupported comparison between different types !");
+  exit(EXIT_FAILURE);
+}
+
+std::shared_ptr<Type> Parser::simple_expression(){
+  bool neg = false;
+  switch(lexer.getToken().type){
+    case PLUS_TOKEN:{
+      lexer.next_sym();
+    }break;
+    case MINUS_TOKEN:{
+      neg = true;
+      lexer.next_sym();
+    }break;
+    default: break;
+  }
+  auto type_a = term();
   bool in = true;
   while(in){
-    switch(lexer.getToken().type){
+    auto tt = lexer.getToken().type;
+    switch(tt){
       case PLUS_TOKEN:
       case MINUS_TOKEN:
-      case OR_TOKEN:
+      case OR_TOKEN:{
         lexer.next_sym();
-        term();
-        break;
+        auto type_b = term();
+        check_store_sum(type_a,type_b,tt);
+        type_a = type_b;
+      }break;
       default: in = false; break;
     }
   }
+  if(neg){
+    switch(type_a->type){
+      case INT_TYPE:{
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data(-1);
+        vm.add_inst(MULI_OP);
+      }break;
+      case REAL_TYPE:{
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data(-1.0f);
+        vm.add_inst(MULF_OP);
+      }break;
+      case CHAR_TYPE:{
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((char)-1);
+        vm.add_inst(MULC_OP);
+      }break;
+      default:
+        println("Can negate only ints,floats/reals and chars !");
+        exit(EXIT_FAILURE);
+    }
+  }
+  return type_a;
 }
 
-void Parser::term(){
-  factor();
+void Parser::check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TOKEN_TYPE tt){
+  if(a->type == SUBRANGE_TYPE){
+    check_store_sum(std::dynamic_pointer_cast<SubrangeType>(a)->boundsType,b,tt);
+    return;
+  }
+  if(b->type == SUBRANGE_TYPE){
+    check_store_sum(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType,tt);
+    return;
+  }
+  if(a->type == INT_TYPE && b->type == INT_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDI_OP); break;
+      case MINUS_TOKEN: vm.add_inst(SUBI_OP); break;
+      default :
+        println("Summation operations for ints are + and - only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == UINT_TYPE && b->type == UINT_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDU_OP); break;
+      case MINUS_TOKEN: vm.add_inst(SUBU_OP); break;
+      default :
+        println("Summation operations for uints are + and - only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == REAL_TYPE && b->type == REAL_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDF_OP); break;
+      case MINUS_TOKEN: vm.add_inst(SUBF_OP); break;
+      default :
+        println("Summation operations for floats/reals are + and - only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if (a->type == BOOLEAN_TYPE && b->type == BOOLEAN_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDB_OP); break;
+      case MINUS_TOKEN: vm.add_inst(SUBB_OP); break;
+      case OR_TOKEN: vm.add_inst(OR_OP); break;
+      default :
+        println("Summation operations for booleans/bytes are + and - and 'or' only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == CHAR_TYPE && b->type == CHAR_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDC_OP); break;
+      case MINUS_TOKEN: vm.add_inst(SUBC_OP); break;
+      default :
+        println("Summation operations for chars are + and - only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == STRING_TYPE && b->type == STRING_TYPE){
+    switch(tt){
+      case PLUS_TOKEN: vm.add_inst(ADDS_OP); break;
+      default :
+        println("Summation operations for strings are + only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  println("Unsupported summation between different types !");
+  exit(EXIT_FAILURE);
+}
+
+std::shared_ptr<Type> Parser::term(){
+  auto type_a = factor();
   bool in = true;
   while(in){
-    switch(lexer.getToken().type){
+    auto tt = lexer.getToken().type;
+    switch(tt){
       case STAR_TOKEN:
       case SLASH_TOKEN:
       case DIV_TOKEN:
-      case MOD_TOKEN:
-      case AND_TOKEN:
+      case AND_TOKEN:{
         lexer.next_sym();
-        factor();
-        break;
+        auto type_b = factor();
+        check_store_mul(type_a,type_b,tt);
+        type_a = type_b;
+      }break;
       default: in = false; break;
     }
   }
+  return type_a;
 }
 
-void Parser::factor(){
+void Parser::check_store_mul(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TOKEN_TYPE tt){
+  if(a->type == SUBRANGE_TYPE){
+    check_store_mul(std::dynamic_pointer_cast<SubrangeType>(a)->boundsType,b,tt);
+    return;
+  }
+  if(b->type == SUBRANGE_TYPE){
+    check_store_mul(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType,tt);
+    return;
+  }
+  if(a->type == INT_TYPE && b->type == INT_TYPE){
+    switch(tt){
+      case STAR_TOKEN: vm.add_inst(MULI_OP); break;
+      case DIV_TOKEN: vm.add_inst(DIVI_OP); break;
+      default :
+        println("multiplication operations for ints are * and DIV only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == UINT_TYPE && b->type == UINT_TYPE){
+    switch(tt){
+      case STAR_TOKEN: vm.add_inst(MULU_OP); break;
+      case DIV_TOKEN: vm.add_inst(DIVU_OP); break;
+      default :
+        println("multiplication operations for uints are * and DIV only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == REAL_TYPE && b->type == REAL_TYPE){
+    switch(tt){
+      case STAR_TOKEN: vm.add_inst(MULF_OP); break;
+      case SLASH_TOKEN: vm.add_inst(DIVF_OP); break;
+      default :
+        println("multiplication operations for floats/reals are * and / only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if (a->type == BOOLEAN_TYPE && b->type == BOOLEAN_TYPE){
+    switch(tt){
+      case STAR_TOKEN: vm.add_inst(MULB_OP); break;
+      case DIV_TOKEN: vm.add_inst(DIVB_OP); break;
+      case AND_TOKEN: vm.add_inst(AND_OP); break;
+      default :
+        println("multiplication operations for booleans/bytes are * and DIV and 'and' only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  if(a->type == CHAR_TYPE && b->type == CHAR_TYPE){
+    switch(tt){
+      case STAR_TOKEN: vm.add_inst(MULC_OP); break;
+      case DIV_TOKEN: vm.add_inst(DIVC_OP); break;
+      default :
+        println("multiplication operations for chars are * and DIV only !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  println("Unsupported summation between different types !");
+  exit(EXIT_FAILURE);
 }
 
+std::shared_ptr<Type> Parser::factor(){
+  auto token = lexer.getToken();
+  switch(token.type){
+    case NUM_INT_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((int)token.ival);
+      lexer.next_sym();
+      return get_type("int");
+    }break;
+    case NUM_REAL_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((float)token.dval);
+      lexer.next_sym();
+      return get_type("real");
+    }break;
+    case STRING_LITERAL_TOKEN:{
+      vm.add_inst(PUSHS_OP);
+      vm.write_const_string(token.id);
+      lexer.next_sym();
+      return get_type("string");
+    }break;
+    //case NIL_TOKEN:
+    //case ID_TOKEN:
+    case LP_TOKEN:{
+      lexer.next_sym();
+      auto res = expression();
+      match(RP_TOKEN);
+      lexer.next_sym();
+      return res;
+    }break;
+    case NOT_TOKEN:{
+      lexer.next_sym();
+      auto f = factor();
+      if(f->type != BOOLEAN_TYPE){
+        println("'not' operator can be used with booleans/bytes only !");
+        exit(EXIT_FAILURE);
+      }
+      vm.add_inst(NOT_OP);      
+      return f;
+    }break;
+    default:
+      matches({
+        NUM_INT_TOKEN,
+        NUM_REAL_TOKEN,
+        STRING_LITERAL_TOKEN,
+        //NIL_TOKEN,
+        //ID_TOKEN,
+        LP_TOKEN,
+        NOT_TOKEN
+      });
+  }
+  return std::shared_ptr<Type>();
+}
 
 void Parser::statement_part(){
-  lexer.next_sym();
+  // lexer.next_sym();
+  auto t = expression();
+  switch(t->type){
+    case INT_TYPE:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data(INT_STD);
+      vm.add_inst(WRITE_OP);
+    }break;
+    case REAL_TYPE:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data(REAL_STD);
+      vm.add_inst(WRITE_OP);
+    }break;
+    case BOOLEAN_TYPE:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data(UCHAR_STD);
+      vm.add_inst(WRITE_OP);
+    }break;
+    case UINT_TYPE:
+    case CHAR_TYPE:
+  }
+  vm.run();
 }

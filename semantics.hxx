@@ -41,7 +41,7 @@ struct EnumType : Type{
 };
 
 struct SubrangeType : Type{
-  STD_TYPE boundsType;
+  std::shared_ptr<Type> boundsType;
   uint amount = 1;
   union{
     Int ibounds[2];
@@ -119,7 +119,7 @@ struct Info{
   std::unordered_map<std::string,std::shared_ptr<Const>> constants;
   std::unordered_map<std::string,std::shared_ptr<Type>> types;
   std::unordered_map<std::string,std::shared_ptr<Var>> variables; 
-  std::unordered_map<std::string,std::shared_ptr<Function>> functions;
+  std::unordered_map<std::string,std::shared_ptr<Var>> functions;
 };
 
 #endif

@@ -883,7 +883,7 @@ void VM::tests_op(){
 /*********************************************************************/
 
 void VM::store_complex_op(){
-  Print("STORE_COMPLEX ");
+  Println("STORE_COMPLEX ");
   // ++pc;
   // VM_STD_TYPE t = (VM_STD_TYPE)bytecode[pc].u;
   // switch(t){

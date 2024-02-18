@@ -168,13 +168,13 @@ void assignment_statement(); // assignment_statement := ( variable_access | FUNC
 void variable_access();      // variable_access := ACCESS_NAME { end_access_ }
 void end_access_(); // end_access_ := { array_access_ | record_access_ | '^' | function_parameters_ }
 void array_access_(); // array_access_ := '[' expression { ',' expression } ']'
-void expression(); // expression := simple_expression [ relational_operator simple_expression ]
-// relational_operator= '=' | '<>' | '<' | '<=' | '>' | '>=' | IN 
-void simple_expression(); // simple_expression := [ '+' | '-' ] term { addition_operator term }
-// addition_operator := '+' | '-' | OR 
-void term(); // term := factor { multiplication_operator factor }
-// multiplication_operator := '*' | '/' | DIV | MOD | AND .
-void factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME | set
+std::shared_ptr<Type> expression(); // expression := simple_expression [ relational_operator simple_expression ]
+// relational_operator= '=' | '<>' | '<' | '<=' | '>' | '>='
+std::shared_ptr<Type> simple_expression(); // simple_expression := [ '+' | '-' ] term { addition_operator term }
+// addition_operator := '+' | '-' | OR
+std::shared_ptr<Type> term(); // term := factor { multiplication_operator factor }
+// multiplication_operator := '*' | '/' | DIV | AND .
+std::shared_ptr<Type> factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME
 // | variable_access | function_designator
 // | '(' expression ')' | NOT factor 
 void set(); // set := '[' expression { ',' expression } ']' 
@@ -236,12 +236,15 @@ std::shared_ptr<RecordType> get_record(
   std::unordered_map<std::string,Var>&& attributes
 );
 std::shared_ptr<FunctionType> get_function(const std::vector<Arg>& args,std::shared_ptr<Type> returnType);
-
+void show_declarations();
 void print_type(std::shared_ptr<Type> t,const std::string &name = "");
 
 void store_constants();
 void store_variables();
 uint store_variable(std::shared_ptr<Type> t);
+void check_store_comparison(std::shared_ptr<Type> a,std::shared_ptr<Type> b);
+void check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TOKEN_TYPE tt);
+void check_store_mul(std::shared_ptr<Type> a, std::shared_ptr<Type> b, TOKEN_TYPE tt);
 
 public:
   std::deque<Info> infos;
