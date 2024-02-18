@@ -93,80 +93,21 @@ enum OP_CODE{
   CMPC_OP,
   CMPS_OP,
 
+  TESTI_OP,
+  TESTU_OP,
+  TESTF_OP,
+  TESTB_OP,
+  TESTC_OP,
+  TESTS_OP,
+
+  AND_OP,
+  OR_OP,
+  NOT_OP,
+
+  JMPTRUE_OP,
+  JMPFALSE_OP,
+
   STORE_COMPLEX_OP, // stores complex types (string...) 
-};
-
-static const std::string opcode_names[] = {
-  "NOP_OP",
-  "HALT_OP",
-  "JMP_OP",
-  "RET_OP",
-  "RET_BASIC_OP",
-
-  "ADDI_OP",
-  "SUBI_OP",
-  "MULI_OP",
-  "DIVI_OP",
-  
-  "ADDU_OP",
-  "SUBU_OP",
-  "MULU_OP",
-  "DIVU_OP",
-  
-  "ADDF_OP",
-  "SUBF_OP",
-  "MULF_OP",
-  "DIVF_OP",
-  
-  "ADDC_OP",
-  "SUBC_OP",
-  "MULC_OP",
-  "DIVC_OP",
-  
-  "ADDB_OP",
-  "SUBB_OP",
-  "MULB_OP",
-  "DIVB_OP",
-
-  "ADDS_OP",
-  "GET_STR_CHAR_OP",
-  "SET_STR_CHAR_OP",
-  "GET_STR_LEN_OP",
-
-  "UNION_OP",
-  "INTER_OP",
-  "DIFF_OP",
-  "SYM_DIFF_OP",
-
-  "MOV_OP",
-  "MOVS_OP",    // concerns strings
-  "MOVSET_OP",
-  "PUSH_OP",
-  "PUSHS_OP",
-  "PUSHSET_OP",
-  "PUSH_CONST_OP",
-  "PUSH_ADDR_OP",
-  "POP_OP",   // should take an argument
-
-  "WRITE_OP",
-  "WRITE_STR_OP",
-  "READ_OP",
-
-  "JMPLT_OP",
-  "JMPLE_OP",
-  "JMPEQ_OP",
-  "JMPNQ_OP",
-  "JMPGT_OP",
-  "JMPGE_OP",
-
-  "CMPI_OP",
-  "CMPU_OP",
-  "CMPF_OP",
-  "CMPB_OP",
-  "CMPC_OP",
-  "CMPS_OP",
-
-  "STORE_COMPLEX_OP", // stores complex types (string...) 
 };
 
 union Address{
@@ -208,15 +149,33 @@ static const std::string std_type_names[] = {
 static const std::string flag_names[] = {
   "<",
   "=",
-  ">"
+  ">",
+  "<=",
+  ">=",
+  "<>"
 };
 
 enum FLAG{
   LT_FLAG,
   EQ_FLAG,
-  GT_FLAG
+  GT_FLAG,
+  LE_FLAG,
+  GE_FLAG,
+  NE_FLAG
 };
 
+template <typename T>
+u_char test_op(const T& a,FLAG f,const T& b){
+  Println(a,' ',flag_names[f],' ',b);
+  switch(f){
+    case LE_FLAG: return a <= b;
+    case LT_FLAG: return a < b;
+    case EQ_FLAG: return a == b;
+    case NE_FLAG: return a != b;
+    case GT_FLAG: return a > b;
+    case GE_FLAG: return a >= b;
+  }
+}
 class VM{
 public:
   std::vector<StdType> bytecode;
@@ -288,6 +247,20 @@ private:
   void cmpf_op();
   void cmpb_op();
   void cmpc_op();
+
+  void testi_op();
+  void testu_op();
+  void testf_op();
+  void testb_op();
+  void testc_op();
+  void tests_op();
+
+  void and_op();
+  void or_op();
+  void not_op();
+
+  void jmptrue_op();
+  void jmpfalse_op();
 
   void jmple_op();
   void jmplt_op();

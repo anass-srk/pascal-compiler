@@ -116,6 +116,20 @@ void VM::run(){
       case RET_BASIC_OP: ret_basic_op(); break;
       case NOP_OP: nop_op(); break;
 
+      case TESTU_OP: testu_op(); break;
+      case TESTI_OP: testi_op(); break;
+      case TESTF_OP: testf_op(); break;
+      case TESTB_OP: testb_op(); break;
+      case TESTC_OP: testc_op(); break;
+      case TESTS_OP: tests_op(); break;
+
+      case AND_OP: and_op(); break;
+      case OR_OP: or_op(); break;
+      case NOT_OP: not_op(); break;
+
+      case JMPTRUE_OP: jmptrue_op(); break;
+      case JMPFALSE_OP: jmpfalse_op(); break;
+
       default:
         println("unknown|not-inemplemented bytecode ?");
         exit(EXIT_SUCCESS);
@@ -516,6 +530,18 @@ void VM::cmpi_op(){
   ++pc;
 }
 
+void VM::testi_op(){
+  Print("TESTI ");
+  int b = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  int a = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  bytecode.emplace_back(test_op(a,f,b));
+  ++pc;
+}
+
 //compares 2 uints and sets flag
 void VM::cmpu_op(){
   Print("CMPU ");
@@ -531,6 +557,18 @@ void VM::cmpu_op(){
   }else{
     flag = LT_FLAG;
   }
+  ++pc;
+}
+
+void VM::testu_op(){
+  Print("TESTU ");
+  uint b = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  uint a = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  bytecode.emplace_back(test_op(a,f,b));
   ++pc;
 }
 
@@ -552,6 +590,18 @@ void VM::cmpf_op(){
   ++pc;
 }
 
+void VM::testf_op(){
+  Print("TESTF ");
+  float b = bytecode[bytecode.size() - 1].f;
+  bytecode.pop_back();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  float a = bytecode[bytecode.size() - 1].f;
+  bytecode.pop_back();
+  bytecode.emplace_back(test_op(a,f,b));
+  ++pc;
+}
+
 //compares 2 bytes and sets flag
 void VM::cmpb_op(){
   Print("CMPB ");
@@ -570,6 +620,18 @@ void VM::cmpb_op(){
   ++pc;
 }
 
+void VM::testb_op(){
+  Print("TESTB ");
+  u_char b = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  u_char a = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  bytecode.emplace_back(test_op(a,f,b));
+  ++pc;
+}
+
 //compares 2 chars and sets flag
 void VM::cmpc_op(){
   Print("CMPC ");
@@ -585,6 +647,18 @@ void VM::cmpc_op(){
   }else{
     flag = LT_FLAG;
   }
+  ++pc;
+}
+
+void VM::testc_op(){
+  Print("TESTC ");
+  char b = bytecode[bytecode.size() - 1].c;
+  bytecode.pop_back();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  char a = bytecode[bytecode.size() - 1].c;
+  bytecode.pop_back();
+  bytecode.emplace_back(test_op(a,f,b));
   ++pc;
 }
 
@@ -690,7 +764,7 @@ std::string VM::read_const_string(uint address){
   const uint len = bytecode[address].u;
   const char *beg = ((char*)bytecode.data()) + (address + 1)*sizeof(StdType);
   std::string res(beg);
-  Println("Reading const string (",(int)beg[0],") !");
+  Println("Reading const string (",res,") !");
   return res;
 }
 
@@ -794,6 +868,18 @@ void VM::get_str_len_op(){
   bytecode.emplace_back((uint)len);
 }
 
+void VM::tests_op(){
+  Print("TESTS ");
+  std::string b = string_stack.top();
+  string_stack.pop();
+  FLAG f = (FLAG)bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  std::string a = string_stack.top();
+  string_stack.pop();
+  bytecode.emplace_back(test_op(a,f,b));
+  ++pc;
+}
+
 /*********************************************************************/
 
 void VM::store_complex_op(){
@@ -836,4 +922,63 @@ void VM::ret_basic_op(){
   Println(addr," the value ",val);
   pc = addr;
   bytecode.emplace_back(val);
+}
+
+void VM::and_op(){
+  Print("AND ");
+  u_char b = bytecode[bytecode.size()-1].b;
+  bytecode.pop_back();
+  u_char a = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  Println(a,' ',b);
+  bytecode.emplace_back((u_char)(a && b));
+  ++pc;
+}
+
+void VM::or_op(){
+  Print("OR ");
+  u_char b = bytecode[bytecode.size()-1].b;
+  bytecode.pop_back();
+  u_char a = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  Println(a,' ',b);
+  bytecode.emplace_back((u_char)(a || b));
+  ++pc;
+}
+
+void VM::not_op(){
+  Print("NOT ");
+  u_char operand = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  Println(operand);
+  bytecode.emplace_back((u_char)(!operand));
+  ++pc;
+}
+
+void VM::jmptrue_op(){
+  Print("JMPTRUE ");
+  u_char operand = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," if ",(uint)operand);
+  if(operand){
+    pc = addr;
+  }else{
+    ++pc;
+  }
+}
+
+void VM::jmpfalse_op(){
+  Print("JMPFALSE ");
+  u_char operand = bytecode[bytecode.size() - 1].b;
+  bytecode.pop_back();
+  ++pc;
+  uint addr = bytecode[pc].u;
+  Println(addr," if not ",(uint)operand);
+  if(operand){
+    ++pc;
+  }else{
+    pc = addr;
+  }
 }

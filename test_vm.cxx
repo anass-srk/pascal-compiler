@@ -8,11 +8,12 @@ void code2(VM& vm);
 void code3(VM& vm);
 void code4(VM &vm);
 void code5(VM& vm);
+void code6(VM& vm);
 
 int main(){
   VM vm;
   // vm.load_from_file("prog.bin");
-  code5(vm);
+  code6(vm);
   vm.run();
   // vm.save_to_file("prog.bin");
 }
@@ -269,6 +270,77 @@ void code5(VM &vm){
   vm.add_inst(PUSH_CONST_OP);
   vm.add_data(UINT_STD);
   vm.add_inst(WRITE_OP);
+
+  vm.add_inst(HALT_OP);
+}
+/*
+int x,y;
+read(x,y);
+if(x == 1 && x == y){
+  write("both numbers are equal to 1\n");
+}else{
+  write("not all the numbers are equal to 0\n");
+}
+*/
+void code6(VM &vm){
+  //Constants
+  vm.add_inst(JMP_OP);
+  uint beg = vm.add_data(0);
+  uint eq = vm.write_const_string("both numbers are equal to 1\n");
+  vm.bytecode[beg] = (uint)vm.bytecode.size();
+  //vars
+  uint x = vm.add_inst(NOP_OP);
+  uint y = vm.add_inst(NOP_OP);
+  //read x and y
+  vm.add_inst(PUSH_ADDR_OP);
+  vm.add_data(x);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(INT_STD);
+  vm.add_inst(READ_OP);
+
+  vm.add_inst(PUSH_ADDR_OP);
+  vm.add_data(y);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(INT_STD);
+  vm.add_inst(READ_OP);
+
+  //x == 1 ?
+  vm.add_inst(PUSH_OP);
+  vm.add_data(x);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)EQ_FLAG);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(1);
+  vm.add_inst(TESTI_OP);
+  //x == y ?
+  vm.add_inst(PUSH_OP);
+  vm.add_data(x);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)EQ_FLAG);
+  vm.add_inst(PUSH_OP);
+  vm.add_data(y);
+  vm.add_inst(TESTI_OP);
+  // and 
+  vm.add_inst(AND_OP);
+
+  vm.add_inst(JMPFALSE_OP);
+  uint Else = vm.add_data(0);
+
+  vm.add_inst(PUSHS_OP);
+  vm.add_data(eq);
+  vm.add_inst(WRITE_STR_OP);
+
+  vm.add_inst(JMP_OP);
+  uint End = vm.add_data(0);
+
+  vm.bytecode[Else] = (uint)vm.bytecode.size();
+
+  vm.add_inst(PUSHS_OP);
+  uint neq = vm.add_data(0);
+  vm.bytecode[neq] = vm.write_const_string("not all the numbers are equal to 1\n");
+  vm.add_inst(WRITE_STR_OP);
+
+  vm.bytecode[End] = (uint)vm.bytecode.size();
 
   vm.add_inst(HALT_OP);
 }
