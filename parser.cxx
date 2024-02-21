@@ -1839,6 +1839,11 @@ std::shared_ptr<Type> Parser::array_access_(std::shared_ptr<Type> t){
     vm.add_inst(CONVI_OP);
 
     vm.add_inst(ADDU_OP);
+    ++i;
+  }
+  if(i != arr_type->indexTypes.size()){
+    println("Expected ",arr_type->indexTypes.size()," index types, found ",i," !");
+    exit(EXIT_FAILURE);
   }
 
   // if(lexer.getToken().type == COMMA_TOKEN){
