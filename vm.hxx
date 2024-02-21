@@ -74,6 +74,8 @@ enum OP_CODE{
   PUSH_CONST_OP,
   PUSH_ADDR_OP,
   POP_OP,   // should take an argument
+  GET_VAL_OP,
+  DUPL_OP,
 
   WRITE_OP,
   WRITE_STR_OP,
@@ -107,7 +109,10 @@ enum OP_CODE{
   JMPTRUE_OP,
   JMPFALSE_OP,
 
+  CONVI_OP,
+
   STORE_COMPLEX_OP, // stores complex types (string...) 
+  REV_OP            // reverses order of stack elements
 };
 
 union Address{
@@ -199,6 +204,8 @@ private:
   void push_addr_op();
   void push_const_op();
   void pop_op();
+  void get_val_op();
+  void dupl_op();
 
   void write_op();
   void write_str_op();
@@ -269,7 +276,10 @@ private:
   void jmpgt_op();
   void jmpge_op();
 
+  void convi_op();
+
   void store_complex_op();
+  void rev_op();
 
   void ret_op();
   void ret_basic_op();

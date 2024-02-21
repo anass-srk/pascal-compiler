@@ -55,10 +55,13 @@ void VM::run(){
     switch(bytecode[pc].u){
       case HALT_OP: halt_op(); break;
       case PUSH_OP: push_op(); break;
+      case GET_VAL_OP: get_val_op(); break;
+      case DUPL_OP: dupl_op(); break;
       case PUSH_CONST_OP: push_const_op(); break;
       case PUSH_ADDR_OP: push_addr_op(); break;
       case JMP_OP: jmp_op(); break;
       case MOV_OP: mov_op(); break;
+      case POP_OP: pop_op(); break;
 
       case ADDU_OP: addu_op(); break;
       case SUBU_OP: subu_op(); break;
@@ -102,6 +105,8 @@ void VM::run(){
       case JMPGT_OP: jmpgt_op(); break;
       case JMPGE_OP: jmpge_op(); break;
 
+      case CONVI_OP: convi_op(); break;
+
       case PUSHS_OP: pushs_op(); break;
       case MOVS_OP: movs_op(); break;
       case ADDS_OP: adds_op(); break;
@@ -111,6 +116,7 @@ void VM::run(){
       case CMPS_OP: cmps_op(); break;
 
       case STORE_COMPLEX_OP: store_complex_op(); break;
+      case REV_OP: rev_op(); break;
 
       case RET_OP: ret_op(); break;
       case RET_BASIC_OP: ret_basic_op(); break;
@@ -131,7 +137,7 @@ void VM::run(){
       case JMPFALSE_OP: jmpfalse_op(); break;
 
       default:
-        println("unknown|not-inemplemented bytecode ?");
+        println("unknown|not-implemented bytecode ? (",bytecode[pc].u,")");
         exit(EXIT_SUCCESS);
     }
   }
@@ -154,6 +160,25 @@ void VM::push_op(){
   Println(" (",bytecode[addr].u,")");
   ++pc;
 }
+// retrieve variable address from the top of the stack and push its value
+void VM::get_val_op(){
+  Print("GET_VAL ");
+  ++pc;
+  uint addr = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  Print(addr);
+  bytecode.emplace_back(bytecode[addr].u);
+  Println(" (",bytecode[addr].u,")");
+}
+// Duplicates top of the stack
+void VM::dupl_op(){
+  Print("DUPL ");
+  ++pc;
+  uint top = bytecode[bytecode.size()-1].u;
+  bytecode.emplace_back(top);
+  Println(top);
+}
+
 // push address
 void VM::push_addr_op(){
   Print("PUSH_ADDR ");
@@ -194,15 +219,8 @@ void VM::mov_op(){
 }
 // why though ?
 void VM::pop_op(){
-  Print("POP type ");
-  VM_STD_TYPE t = (VM_STD_TYPE)bytecode[bytecode.size()-1].u;
+  Println("POP ");
   bytecode.pop_back();
-  Print(std_type_names[t]," , ",bytecode[bytecode.size()-1].u);
-  switch(t){
-    case STRING_STD: string_stack.pop(); break;
-    default:
-      bytecode.pop_back();
-  }
   ++pc;
 }
 // write operand 
@@ -216,7 +234,7 @@ void VM::write_op(){
     case INT_STD: print(value.i); break;
     case REAL_STD: print(value.f); break;
     case UINT_STD: print(value.u); break;
-    case UCHAR_STD: print(value.c); break;
+    case UCHAR_STD: print((int)value.c); break;
     case CHAR_STD: print(value.c); break;
     case STRING_STD:{
       if(value.u == 0){
@@ -739,6 +757,28 @@ void VM::jmpge_op(){
 
 /*********************************************************************/
 
+void VM::convi_op(){
+  Print("CONVI ");
+  VM_STD_TYPE t = static_cast<VM_STD_TYPE>(bytecode[bytecode.size() - 1].u);
+  bytecode.pop_back();
+  int value = bytecode[bytecode.size() - 1].i;
+  bytecode.pop_back();
+  Println("converts int ",value," to ",std_type_names[t]);
+  switch(t){
+    case REAL_STD: bytecode.emplace_back((float)value); break;
+    case UINT_STD: bytecode.emplace_back((uint)value); break;
+    case UCHAR_STD: bytecode.emplace_back((u_char)value); break;
+    case CHAR_STD: bytecode.emplace_back((char)value); break;
+    default:
+      println("converts int only to real,uint,bool and char !");
+      exit(EXIT_FAILURE);
+      break;
+  }
+  ++pc;
+}
+
+/*********************************************************************/
+
 // stores const string in the bytecode
 uint VM::write_const_string(const std::string &s){
   const size_t loc = bytecode.size();
@@ -833,7 +873,7 @@ void VM::cmps_op(){
 void VM::get_str_char_op(){
   Print("GET_STR_CHAR at ");
   ++pc;
-  uint i = bytecode[bytecode.size()-1].u;
+  int i = bytecode[bytecode.size()-1].i;
   bytecode.pop_back();
   std::string s = string_stack.top();
   string_stack.pop();
@@ -844,7 +884,7 @@ void VM::get_str_char_op(){
 void VM::set_str_char_op(){
   Print("SET_STR_CHAR ");
   ++pc;
-  uint i = bytecode[bytecode.size()-1].u;
+  int i = bytecode[bytecode.size()-1].i;
   bytecode.pop_back();
   uint addr = bytecode[bytecode.size()-1].u;
   bytecode.pop_back();
@@ -901,6 +941,23 @@ void VM::store_complex_op(){
   // ++pc;
   strings[pc] = "";
   ++pc;
+}
+
+void VM::rev_op(){
+  Print("REV_OP ");
+  ++pc;
+  uint amount = bytecode[bytecode.size()-1].u;
+  bytecode.pop_back();
+  Println(" an amount of ",amount);
+  if(amount == 0){
+    println("reverse stack elements'order of 0 elements ?");
+    exit(EXIT_FAILURE);
+  }
+  uint end = (uint)bytecode.size() - 1;
+  uint beg = (uint)bytecode.size() - amount;
+  for(uint i = 0;i < amount/2 ;++i){
+    std::swap(bytecode[beg + i],bytecode[end - i]);
+  }
 }
 
 /*********************************************************************/
