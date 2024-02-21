@@ -117,7 +117,9 @@ struct Info{
   std::unordered_map<Int,Label> labels;
   std::unordered_map<std::string,std::shared_ptr<Const>> constants;
   std::unordered_map<std::string,std::shared_ptr<Type>> types;
-  std::unordered_map<std::string,std::shared_ptr<Var>> variables; 
+  std::unordered_map<std::string,std::shared_ptr<Var>> variables;
+  std::unordered_map<std::string, std::shared_ptr<Var>> arg_variables;
+  std::vector<std::string> args_order;
   std::unordered_map<std::string,std::shared_ptr<Var>> functions;
 };
 

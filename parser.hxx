@@ -175,8 +175,8 @@ std::shared_ptr<Type> term(); // term := factor { multiplication_operator factor
 // multiplication_operator := '*' | '/' | DIV | AND .
 std::shared_ptr<Type> factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME | ENUM_VALUE
 // | variable_access | function_designator
-// | '(' expression ')' | NOT factor 
-void function_designator(); // function_designator := FUNCTION_NAME [ actual_parameter_list ]
+// | '(' expression ')' | NOT factor
+void function_designator();                    // function_designator := FUNCTION_NAME [ '(' actual_parameter { ',' actual_parameter } ')' ]
 std::shared_ptr<Type> actual_parameter_list(); // actual_parameter_list := '(' actual_parameter { ',' actual_parameter } ')'
 std::shared_ptr<Type> actual_parameter();      // actual_parameter := expression | variable_access | PROCEDURE_NAME
 // | FUNCTION_NAME .
@@ -213,6 +213,7 @@ void quit_if_id_is_used(const std::string& id);
 
 std::shared_ptr<Const> get_constant(const std::string& id);
 std::shared_ptr<Var> get_variable(const std::string& id);
+std::shared_ptr<Var> get_function(const std::string &id);
 std::shared_ptr<Type> get_type(const std::string& id);
 
 inline std::string name_subrange(Int lower,Int upper){
@@ -236,12 +237,13 @@ std::shared_ptr<PointerType> get_pointer(std::shared_ptr<Type> valueType);
 std::shared_ptr<RecordType> get_record(
   std::unordered_map<std::string,Var>&& attributes
 );
-std::shared_ptr<FunctionType> get_function(const std::vector<Arg>& args,std::shared_ptr<Type> returnType);
+std::shared_ptr<FunctionType> get_function_type(const std::vector<Arg>& args,std::shared_ptr<Type> returnType);
 void show_declarations();
 void print_type(std::shared_ptr<Type> t,const std::string &name = "");
 
 void store_constants();
 void store_variables();
+uint store_args_variables();
 uint store_variable(std::shared_ptr<Type> t);
 void check_store_comparison(std::shared_ptr<Type> a,std::shared_ptr<Type> b);
 void check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TOKEN_TYPE tt);

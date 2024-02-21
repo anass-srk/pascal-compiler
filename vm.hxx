@@ -66,6 +66,7 @@ enum OP_CODE{
   SYM_DIFF_OP,
 
   MOV_OP,
+  MOVN_OP,
   MOVS_OP,    // concerns strings
   MOVSET_OP,
   PUSH_OP,
@@ -201,6 +202,7 @@ private:
   void push_op();
   void jmp_op();
   void mov_op();
+  void movn_op();
   void push_addr_op();
   void push_const_op();
   void pop_op();

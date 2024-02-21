@@ -61,6 +61,7 @@ void VM::run(){
       case PUSH_ADDR_OP: push_addr_op(); break;
       case JMP_OP: jmp_op(); break;
       case MOV_OP: mov_op(); break;
+      case MOVN_OP: movn_op(); break;
       case POP_OP: pop_op(); break;
 
       case ADDU_OP: addu_op(); break;
@@ -217,6 +218,21 @@ void VM::mov_op(){
   bytecode[dest].u = src;
   ++pc;
 }
+// move from top of the stack to destination address n bytes then pops stack n times
+void VM::movn_op(){
+  Print("MOVN ");
+  uint dest = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  uint amount = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  Println(amount," of bytes to ",dest);
+  for(uint i = 0;i < amount;++i){
+    bytecode[dest + i] = bytecode[bytecode.size()-1];
+    bytecode.pop_back();
+  }
+  ++pc;
+}
+
 // why though ?
 void VM::pop_op(){
   Println("POP ");

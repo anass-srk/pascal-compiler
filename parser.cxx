@@ -188,7 +188,7 @@ std::shared_ptr<RecordType> Parser::get_record(
   return p;
 }
 
-std::shared_ptr<FunctionType> Parser::get_function(const std::vector<Arg> &args, std::shared_ptr<Type> returnType){
+std::shared_ptr<FunctionType> Parser::get_function_type(const std::vector<Arg> &args, std::shared_ptr<Type> returnType){
   std::string name = "_function_";
   for(auto& arg : args){
     name += "_" ;
@@ -241,7 +241,8 @@ void Parser::quit_if_id_is_used(const std::string& id){
     infos[0].constants.contains(id) ||
     infos[0].functions.contains(id) ||
     infos[0].types.contains(id) ||
-    infos[0].variables.contains(id)
+    infos[0].variables.contains(id) ||
+    infos[0].arg_variables.contains(id)
   ){
     println("The id (",id,") is already taken !");
     exit(EXIT_FAILURE);
@@ -262,8 +263,20 @@ std::shared_ptr<Var> Parser::get_variable(const std::string &id){
     if(i.variables.contains(id)){
       return i.variables[id];
     }
+    if(i.arg_variables.contains(id)){
+      return i.arg_variables[id];
+    }
   }
   return std::shared_ptr<Var>();
+}
+
+std::shared_ptr<Var> Parser::get_function(const std::string &id){
+  for(auto &i : infos){
+    if(i.functions.contains(id)){
+      return i.functions[id];
+    }
+  }
+  return nullptr;
 }
 
 std::shared_ptr<Type> Parser::get_type(const std::string& id){
@@ -451,6 +464,11 @@ void Parser::show_declarations(){
     println("var (",s,") at ",v->loc," ");
     print_type(v->type);
   }
+  println("args as variables :");
+  for(auto& [s,v] : infos[0].arg_variables){
+    println("var (",s,") at ",v->loc," ");
+    print_type(v->type);
+  }
   println("Functions : ");
   for(auto &[s,v] : infos[0].functions){
     println("Function name '",s,"' with type :");
@@ -466,6 +484,9 @@ void Parser::program(){
   program_name = lexer.getToken().id;
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
+  Info info;
+  init_info(info);
+  infos.emplace_front(std::move(info));
   block();
   match(DOT_TOKEN);
   vm.add_inst(HALT_OP);
@@ -547,10 +568,21 @@ void Parser::store_variables(){
   }
 }
 
+uint Parser::store_args_variables(){
+  for(auto &name : infos[0].args_order){
+    auto v = infos[0].arg_variables[name];
+    v->loc = store_variable(v->type);
+    println("Storing arg as variable '",name, "' in ", v->loc);
+  }
+  if(infos[0].args_order.size()){
+    return infos[0].arg_variables[infos[0].args_order[0]]->loc;
+  }
+  return -1;
+}
+
 void Parser::declaration_part(){
-  Info info;
-  init_info(info);
-  infos.emplace_front(std::move(info));
+  vm.add_inst(JMP_OP);
+  uint end = vm.add_data(0);
   bool in = true;
   while(in){
     switch(lexer.getToken().type){
@@ -563,7 +595,7 @@ void Parser::declaration_part(){
       default: in = false;
     }
   }
-
+  vm.bytecode[end] = (uint)vm.bytecode.size();
   // Saving constants (int | float | string)
   store_constants();
   // Saving variables
@@ -1020,9 +1052,9 @@ std::shared_ptr<FunctionType> Parser::procedure_type(){
   match(PROCEDURE_TOKEN);
   lexer.next_sym();
   if(lexer.getToken().type == LP_TOKEN){
-    return get_function(formal_parameter_list(),get_type("void"));
+    return get_function_type(formal_parameter_list(),get_type("void"));
   }
-  return get_function(std::vector<Arg>(), get_type("void"));
+  return get_function_type(std::vector<Arg>(), get_type("void"));
 }
 
 std::vector<Arg> Parser::formal_parameter_list(){
@@ -1090,7 +1122,7 @@ std::shared_ptr<FunctionType> Parser::function_type(){
     exit(EXIT_FAILURE);
   }
   lexer.next_sym();
-  return get_function(args,t);
+  return get_function_type(args,t);
 }
 
 void Parser::procedure_declaration(){
@@ -1104,10 +1136,35 @@ void Parser::procedure_declaration(){
   }
   match(SEMI_TOKEN);
   lexer.next_sym();
-  infos[0].functions[name] = std::make_shared<Var>(get_function(v,get_type("void")));
+  infos[0].functions[name] = std::make_shared<Var>(get_function_type(v,get_type("void")));
+  infos[0].functions[name]->loc = (uint)vm.bytecode.size();
+
+  Info info;
+  init_info(info);
+  uint args_size = 0;
+  for(auto &arg : v){
+    info.arg_variables[arg.id] = std::make_shared<Var>(arg.type);
+    info.args_order.emplace_back(arg.id);
+    args_size += arg.type->size;
+  }
+
+  infos.emplace_front(std::move(info));
+
+  uint storage_beg = store_args_variables();
+
+  if(storage_beg != (uint)-1){
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
+    vm.add_inst(PUSH_ADDR_OP);
+    vm.add_data(storage_beg);
+    vm.add_inst(MOVN_OP);
+  }
+  
   block();
-  show_declarations();
+  // show_declarations();
   infos.pop_front();
+
+  vm.add_inst(RET_OP);
 }
 
 void Parser::function_declaration(){
@@ -1129,9 +1186,9 @@ void Parser::function_declaration(){
   }
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
-  infos[0].functions[name] = std::make_shared<Var>(get_function(v,t));
+  infos[0].functions[name] = std::make_shared<Var>(get_function_type(v,t));
   block();
-  infos.pop_front();
+  // infos.pop_front();
 }
 
 std::shared_ptr<Type> Parser::expression(){
@@ -1193,6 +1250,14 @@ void Parser::check_store_comparison(std::shared_ptr<Type> a, std::shared_ptr<Typ
     check_store_comparison(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType);
     return;
   }
+  if(a->type == ENUM_TYPE){
+    check_store_comparison(get_type("int"),b);
+    return;
+  }
+  if(b->type == ENUM_TYPE){
+    check_store_comparison(a,get_type("int"));
+    return;
+  }
   if(a->type == INT_TYPE && b->type == INT_TYPE){
     vm.add_inst(TESTI_OP);
     return;
@@ -1211,14 +1276,6 @@ void Parser::check_store_comparison(std::shared_ptr<Type> a, std::shared_ptr<Typ
   }
   if(a->type == CHAR_TYPE && b->type == CHAR_TYPE){
     vm.add_inst(TESTC_OP);
-    return;
-  }
-  if(a->type == ENUM_TYPE && b->type == ENUM_TYPE){
-    if(a != b){
-      println("Cannot compare values of 2 different enums !");
-      exit(EXIT_FAILURE);
-    }
-    vm.add_inst(TESTI_OP);
     return;
   }
   println("Unsupported comparison between different types !");
@@ -1285,6 +1342,14 @@ void Parser::check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TO
   }
   if(b->type == SUBRANGE_TYPE){
     check_store_sum(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType,tt);
+    return;
+  }
+  if(a->type == ENUM_TYPE){
+    check_store_sum(get_type("int"),b,tt);
+    return;
+  }
+  if(b->type == ENUM_TYPE){
+    check_store_sum(a,get_type("int"),tt);
     return;
   }
   if(a->type == INT_TYPE && b->type == INT_TYPE){
@@ -1370,6 +1435,14 @@ void Parser::check_store_mul(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TO
   }
   if(b->type == SUBRANGE_TYPE){
     check_store_mul(a,std::dynamic_pointer_cast<SubrangeType>(b)->boundsType,tt);
+    return;
+  }
+  if(a->type == ENUM_TYPE){
+    check_store_mul(get_type("int"),b,tt);
+    return;
+  }
+  if(b->type == ENUM_TYPE){
+    check_store_mul(a,get_type("int"),tt);
     return;
   }
   if(a->type == INT_TYPE && b->type == INT_TYPE){
@@ -1607,8 +1680,7 @@ void Parser::statement(){
       if(var){
         assignment_statement();
       }else{
-        println("No variable '",token.id,"' exists !");
-        exit(EXIT_FAILURE);
+        procedure_statement();
       }
     }break;
     case READ_TOKEN:
@@ -1658,6 +1730,8 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
       case REAL_TYPE:
       case BOOLEAN_TYPE:
       case CHAR_TYPE:
+      case SUBRANGE_TYPE:
+      case ENUM_TYPE:
         vm.add_inst(PUSH_CONST_OP);
         vm.add_data((uint)2);
         vm.add_inst(REV_OP);
@@ -1676,7 +1750,6 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
       println("Can only assign first char of an array char to a char !");
       exit(EXIT_FAILURE);
     }
-    println("LEN ",arr_type->amount);
     for(uint i = 1;i < arr_type->amount;++i){
       vm.add_inst(POP_OP);
     }
@@ -2027,11 +2100,60 @@ void Parser::procedure_statement(){
       lexer.next_sym();
     }
   }break;
-    // case ID_TOKEN:
+    case ID_TOKEN:{
+      std::string name = lexer.getToken().id;
+      auto proc = get_function(name);
+      if(!proc){
+        println("No procedure named '",name,"' exists !");
+        exit(EXIT_FAILURE);
+      }
+      auto proc_type = std::dynamic_pointer_cast<FunctionType>(proc->type);
+      if(proc_type->returnType->type != VOID_TYPE){
+        println("Expected a procedure, found a function named '", name, "' !");
+        exit(EXIT_FAILURE);
+      }
+
+      vm.add_inst(PUSH_CONST_OP);
+      uint ret_addr = vm.add_data(0);
+
+      lexer.next_sym();
+      
+      std::vector<std::shared_ptr<Type>> exprs;
+      if(proc_type->args.size()){
+        match(LP_TOKEN);
+        do{
+          lexer.next_sym();
+          exprs.push_back(expression());
+        }while(lexer.getToken().type == COMMA_TOKEN);
+        match(RP_TOKEN);
+        lexer.next_sym();
+      }
+
+      if(exprs.size() != proc_type->args.size()){
+        println("Procedure '", name, "' expects ", proc_type->args.size()," arguments ,it found ",exprs.size()," !");
+        exit(EXIT_FAILURE);
+      }
+
+      for(uint i = 0;i < exprs.size();++i){
+        if(exprs[i] != proc_type->args[i].type){
+          println("For procedure call of '",name,"' ,expected different i-th argument !");
+          exit(EXIT_FAILURE);
+        }
+      }
+
+      vm.add_inst(JMP_OP);
+      vm.add_data(proc->loc);
+      vm.bytecode[ret_addr] = (uint)vm.bytecode.size();
+    }break;
   default:
     println("Procedure calls not implemented except read and write !");
     exit(EXIT_FAILURE);
   }
+}
+// Should deal with produres and functions
+// Maybe variable references ? 
+std::shared_ptr<Type> Parser::actual_parameter(){
+  return expression();
 }
 
 void Parser::goto_statement(){
@@ -2184,7 +2306,6 @@ void Parser::case_statement(){
   match(CASE_TOKEN);
   lexer.next_sym();
   auto e = expression();
-  println("EXP : ",e->type);
   switch(e->type){
     case INT_TYPE: 
     case REAL_TYPE:
