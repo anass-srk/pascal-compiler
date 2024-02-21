@@ -173,6 +173,13 @@ void Lexer::read_string(){
       }else{
         break;
       }
+    }else if(current_char == '\\'){
+      read_char();
+      if(current_char == 'n'){
+        token.id += '\n';
+      }else{
+        token.id += '\\' + (char)current_char;
+      }
     }else{
       token.id += current_char;
     }

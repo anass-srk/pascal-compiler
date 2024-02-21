@@ -280,8 +280,18 @@ void VM::read_op(){
         std::cin >> tmp;
         string_stack.push(tmp);
       }else{
-        println("reading strings only throught the stack !");
-        exit(EXIT_FAILURE);
+        std::string tmp;
+        std::cin >> tmp;
+        uint len = bytecode[++pc].u;
+        uint i = 0;
+        while(i < len && i < tmp.length()){
+          bytecode[addr + i].c = tmp[i];
+          ++i;
+        }
+        while(i < len){
+          bytecode[addr + i].c = '\0';
+          ++i;
+        }
       }
     }break;
     default:

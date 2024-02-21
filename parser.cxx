@@ -1439,11 +1439,13 @@ std::shared_ptr<Type> Parser::factor(){
         println("Const strings'lengths should be greater than 0 !");
         exit(EXIT_FAILURE);
       }
+      println("_LEN_ : ",s.length());
       for(uint i = 0;i < s.length();++i){
         vm.add_inst(PUSH_CONST_OP);
-        println("Here ?");
         vm.add_data((char)s[i]);
+        println("PUSHED ",s[i]);
       }
+      lexer.next_sym();
       return std::shared_ptr<Type>(get_array(
         std::vector<std::shared_ptr<Type>>{get_subrange(0,(Int)s.length()-1)},
         get_type("char")));
@@ -1647,6 +1649,23 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
         println("Assignment works only on basic types !");
         exit(EXIT_FAILURE);
     }
+    return;
+  }
+  if(a->type == CHAR_TYPE && b->type == ARRAY_TYPE){
+    auto arr_type = std::dynamic_pointer_cast<ArrayType>(b);
+    if(arr_type->valueType->type != CHAR_TYPE){
+      println("Can only assign first char of an array char to a char !");
+      exit(EXIT_FAILURE);
+    }
+    println("LEN ",arr_type->amount);
+    for(uint i = 1;i < arr_type->amount;++i){
+      vm.add_inst(POP_OP);
+    }
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data((uint)2);
+    vm.add_inst(REV_OP);
+
+    vm.add_inst(MOV_OP);
     return;
   }
   println("Cannot assign an expression to a variable of a different type ! (",a->name,",",b->name,")");
@@ -1889,18 +1908,31 @@ void Parser::procedure_statement(){
         if(!t){
           println("Can read variables only !");
         }
-        vm.add_inst(PUSH_ADDR_OP);
-        switch(t->type){
-          case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
-          case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
-          case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
-          case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
-          case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
-          default:
-            println("Expected basic type for reading/writing data !");
-            exit(EXIT_FAILURE);
+        if(t->type == ARRAY_TYPE){
+        if (auto arr_type = std::dynamic_pointer_cast<ArrayType>(t); arr_type->valueType->type == CHAR_TYPE){
+              vm.add_inst(PUSH_CONST_OP);
+              vm.add_data((uint)STRING_STD);
+              vm.add_inst(READ_OP);
+              vm.add_data((uint)arr_type->amount);
+            }
+            else{
+              println("Can read arrays of chars only !");
+              exit(EXIT_FAILURE);
+            }
+        }else{
+          vm.add_inst(PUSH_ADDR_OP);
+          switch(t->type){
+            case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
+            case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
+            case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
+            case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
+            case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
+            default:
+              println("Expected basic type for reading/writing data !");
+              exit(EXIT_FAILURE);
+          }
+          vm.add_inst(READ_OP);
         }
-        vm.add_inst(READ_OP);
       }while(lexer.getToken().type == COMMA_TOKEN);
       match(RP_TOKEN);
       lexer.next_sym();
@@ -1911,21 +1943,67 @@ void Parser::procedure_statement(){
     if(lexer.next_sym().type == LP_TOKEN){
       do{
         lexer.next_sym();
-        auto t = expression();
-        vm.add_inst(PUSH_CONST_OP);
-        switch(t->type){
-          case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
-          case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
-          case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
-          case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
-          case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
-          default:
-            println("Expected basic type for reading/writing data !");
-            exit(EXIT_FAILURE);
+        auto t = variable_access();
+        bool isvar_arr = false;
+        if(t){
+          if(t->type == ARRAY_TYPE){
+            isvar_arr = true;
+            if (auto arr_type = std::dynamic_pointer_cast<ArrayType>(t); arr_type->valueType->type == CHAR_TYPE){
+              for (uint i = 0; i < arr_type->amount; ++i){
+                vm.add_inst(DUPL_OP);
+                
+                vm.add_inst(PUSH_CONST_OP);
+                vm.add_data((uint)i);
+                vm.add_inst(ADDU_OP);
+
+                vm.add_inst(GET_VAL_OP);
+                
+                vm.add_inst(PUSH_CONST_OP);
+                vm.add_data((uint)CHAR_STD);
+                vm.add_inst(WRITE_OP);
+              }
+              vm.add_inst(POP_OP);
+            }
+            else{
+              println("Can print arrays of chars only !");
+              exit(EXIT_FAILURE);
+            }
+          }else{
+            vm.add_inst(GET_VAL_OP);
+          }
+        }else{
+          t = expression();
         }
-        vm.add_inst(WRITE_OP);
+        if(t->type == ARRAY_TYPE && !isvar_arr){
+            if (auto arr_type = std::dynamic_pointer_cast<ArrayType>(t); arr_type->valueType->type == CHAR_TYPE){
+              vm.add_inst(PUSH_CONST_OP);
+              vm.add_data((uint)arr_type->amount);
+              vm.add_inst(REV_OP);
+              for (uint i = 0; i < arr_type->amount; ++i){
+                vm.add_inst(PUSH_CONST_OP);
+                vm.add_data((uint)CHAR_STD);
+                vm.add_inst(WRITE_OP);
+              }
+            }
+            else{
+              println("Can print arrays of chars only !");
+              exit(EXIT_FAILURE);
+            }
+        }else if(!isvar_arr){
+          vm.add_inst(PUSH_CONST_OP);
+          switch(t->type){
+            case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
+            case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
+            case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
+            case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
+            case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
+            default:
+              println("Expected basic type for reading/writing data !");
+              exit(EXIT_FAILURE);
+          }
+          vm.add_inst(WRITE_OP);
+        }
       }while(lexer.getToken().type == COMMA_TOKEN);
-      println("Here : ", token_type_name[lexer.getToken().type]);
       match(RP_TOKEN);
       lexer.next_sym();
     }
@@ -1954,13 +2032,11 @@ void Parser::while_statement(){
   match(WHILE_TOKEN);
   lexer.next_sym();
   uint beg = (uint)vm.bytecode.size();
-  println("In while !");
   auto t = expression();
   if(t->type != BOOLEAN_TYPE){
     println("For conditions only booleans are accepted !");
     exit(EXIT_FAILURE);
   }
-  println("In while !");
   match(DO_TOKEN);
   lexer.next_sym();
 
