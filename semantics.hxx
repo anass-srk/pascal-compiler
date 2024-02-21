@@ -13,8 +13,7 @@ enum STD_TYPE{
   REAL_TYPE,
   BOOLEAN_TYPE,
   CHAR_TYPE,
-  CONST_STR_TYPE, // For constants only (length > 1)
-  STRING_TYPE,
+  CONST_STR_TYPE, // For constants only
   ENUM_TYPE,
   SUBRANGE_TYPE,
   ARRAY_TYPE,
@@ -67,7 +66,7 @@ struct Const{
 struct Var{
   std::shared_ptr<Type> type;
   uint loc = 0;
-  Var(std::shared_ptr<Type> type) : type(type) {}
+  Var(std::shared_ptr<Type> type,uint loc = 0) : type(type) , loc(loc) {}
   Var(){}
 };
 
@@ -105,7 +104,7 @@ struct FunctionType : Type{
 };
 
 struct Label {
-  std::size_t loc;
+  uint loc;
 };
 
 struct Function{

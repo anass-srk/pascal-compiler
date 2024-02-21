@@ -3,7 +3,7 @@
 //GET TYPES
 
 std::shared_ptr<SubrangeType> Parser::get_subrange(Int lower,Int upper){
-  if(lower >= upper){
+  if(lower > upper){
     println("For subrange types (l..u), we should have l < u !");
     exit(EXIT_FAILURE);
   }
@@ -70,6 +70,20 @@ std::shared_ptr<EnumType> Parser::get_enum(std::vector<std::string>&& v){
   p->size = 1;
   infos[0].types[p->name] = std::dynamic_pointer_cast<Type>(p);
   return p;
+}
+
+std::shared_ptr<EnumType> Parser::get_enum_value(const std::string &name){
+  for(auto &i : infos){
+    for(auto &t : i.types){
+      if(t.second->type == ENUM_TYPE){
+        auto p = std::dynamic_pointer_cast<EnumType>(t.second);
+        if(p->ids.contains(name)){
+          return p;
+        }
+      }
+    }
+  }
+  return std::shared_ptr<EnumType>();
 }
 
 std::shared_ptr<ArrayType> Parser::get_array(
@@ -155,7 +169,7 @@ std::shared_ptr<RecordType> Parser::get_record(
 ){
   std::string name = "_record_";
   for(auto& [_,t] : attributes){
-    name += "_" + t.type->name + "_";
+    name += "_" + t.type->name + "_" + _ + "_";
   }
   for(auto& i:infos){
     if(i.types.contains(name)){
@@ -243,6 +257,15 @@ std::shared_ptr<Const> Parser::get_constant(const std::string& id){
   return std::shared_ptr<Const>();
 }
 
+std::shared_ptr<Var> Parser::get_variable(const std::string &id){
+  for(auto& i : infos){
+    if(i.variables.contains(id)){
+      return i.variables[id];
+    }
+  }
+  return std::shared_ptr<Var>();
+}
+
 std::shared_ptr<Type> Parser::get_type(const std::string& id){
   for(auto& i: infos){
     if(i.types.contains(id)){
@@ -327,8 +350,7 @@ void Parser::print_type(std::shared_ptr<Type> t,const std::string& name){
     case REAL_TYPE : println("Real Number"); break;
     case BOOLEAN_TYPE :  println("Boolean"); break;
     case CHAR_TYPE :  println("Character"); break;
-    case STRING_TYPE: println("String"); break;
-    case CONST_STR_TYPE : println("Constant String (length > 1)"); break;
+    case CONST_STR_TYPE : println("Constant String (length >= 1)"); break;
     case ENUM_TYPE :  {
         auto e = std::dynamic_pointer_cast<EnumType>(t);
         print("( ");
@@ -406,8 +428,6 @@ void init_info(Info& info){
   info.types["boolean"]->name = "boolean";
   info.types["char"] = std::make_shared<Type>(CHAR_TYPE);
   info.types["char"]->name = "char";
-  info.types["string"] = std::make_shared<Type>(STRING_TYPE);
-  info.types["string"]->name = "string";
   info.types["void"] = std::make_shared<Type>(VOID_TYPE);
   info.types["void"]->name = "void";
 }
@@ -447,12 +467,14 @@ void Parser::program(){
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
   block();
-  //show_declarations();
-  //match(DOT_TOKEN);
+  match(DOT_TOKEN);
+  vm.add_inst(HALT_OP);
+  vm.run();
 }
 
 void Parser::block(){
   declaration_part();
+  // show_declarations();
   statement_part();
 }
 
@@ -463,7 +485,17 @@ void Parser::store_constants(){
     switch(c->type){
       case INT_TYPE: c->loc = vm.add_data((int)std::get<Int>(c->value)); break;
       case REAL_TYPE: c->loc = vm.add_data((float)std::get<double>(c->value)); break;
-      case STRING_TYPE: c->loc = vm.write_const_string(std::get<std::string>(c->value)); break;
+      case CONST_STR_TYPE:{
+        std::string s = std::get<std::string>(c->value);
+        if(s.length() == 0){
+          println("Const strings'lengths should be greater than 0 !");
+          exit(EXIT_FAILURE);
+        }
+        c->loc = vm.add_data((char)s[0]);
+        for(uint i = 1;i < s.length();++i){
+          vm.add_data((char)s[i]);
+        }
+      } break;
       default:
         println("A constant (",name,") is an int, a real or a string !");
         exit(EXIT_FAILURE);
@@ -485,9 +517,6 @@ uint Parser::store_variable(std::shared_ptr<Type> t){
     case POINTER_TYPE:
       return vm.add_inst(NOP_OP);
       break;
-    case STRING_TYPE:
-      return vm.add_inst(STORE_COMPLEX_OP);
-      break;
     case ARRAY_TYPE:{
       auto arr_type = std::dynamic_pointer_cast<ArrayType>(t);
       uint loc = store_variable(arr_type->valueType);
@@ -505,7 +534,7 @@ uint Parser::store_variable(std::shared_ptr<Type> t){
       return loc;
     }break;
     default:
-      println("Cannot create variables as sets or files !");
+      println("Can only create variables of these types (int,uint,real,char,boolean,subrange,enum,array,record) !");
       exit(EXIT_FAILURE);
   }
 }
@@ -513,6 +542,7 @@ uint Parser::store_variable(std::shared_ptr<Type> t){
 void Parser::store_variables(){
   for(auto &[_,v] : infos[0].variables){
     v->loc = store_variable(v->type);
+    println("Storing variable '", _, "' in ",v->loc);
   }
 }
 
@@ -603,12 +633,16 @@ Const Parser::constant(){
         c.value = t.dval;
         break;
       case STRING_LITERAL_TOKEN:
-        c.type = STRING_TYPE;
+        c.type = CONST_STR_TYPE;
         c.value = t.id;
+        if(t.id.length() == 0){
+          println("Const strings'lengths should be greater than 0 !");
+          exit(EXIT_FAILURE);
+        }
         break;
     }
   }
-  if(c.type == STRING_TYPE && (pos || neg)){
+  if(c.type == CONST_STR_TYPE && (pos || neg)){
     println("Cannot use '+' or '-' with a string !");
     exit(EXIT_FAILURE);
   }
@@ -655,11 +689,11 @@ std::shared_ptr<Type> Parser::type(){
     case PACKED_TOKEN:
     case ARRAY_TOKEN:
     case RECORD_TOKEN:
-    case SET_TOKEN:
-    case FILE_TOKEN:
+    // case SET_TOKEN:
+    // case FILE_TOKEN:
       return structured_type();
       break;
-    case POINTER_TOKEN: return std::dynamic_pointer_cast<Type>(pointer_type());  break;
+    // case POINTER_TOKEN: return std::dynamic_pointer_cast<Type>(pointer_type());  break;
     case PROCEDURE_TOKEN: return std::dynamic_pointer_cast<Type>(procedure_type()); break;
     case FUNCTION_TOKEN: return std::dynamic_pointer_cast<Type>(function_type()); break;
     // type name
@@ -688,9 +722,9 @@ std::shared_ptr<Type> Parser::type(){
         PACKED_TOKEN,
         ARRAY_TOKEN,
         RECORD_TOKEN,
-        SET_TOKEN,
-        FILE_TOKEN,
-        POINTER_TOKEN,
+        // SET_TOKEN,
+        // FILE_TOKEN,
+        // POINTER_TOKEN,
         PROCEDURE_TOKEN,
         FUNCTION_TOKEN
       });
@@ -739,7 +773,7 @@ std::shared_ptr<SubrangeType> Parser::subrange_type(){
     return get_subrange(get<Int>(lower_bound.value),get<Int>(upper_bound.value));
   }
   if(
-    lower_bound.type == STRING_TYPE &&
+    lower_bound.type == CONST_STR_TYPE &&
     get<std::string>(lower_bound.value).length() == 1 &&
     get<std::string>(upper_bound.value).length() == 1
   )
@@ -768,8 +802,8 @@ std::shared_ptr<Type> Parser::unpacked_structured_type(){
       matches({
         ARRAY_TOKEN,
         RECORD_TOKEN,
-        SET_TOKEN,
-        FILE_TOKEN
+        // SET_TOKEN,
+        // FILE_TOKEN
       });
   }
   println("sets and files are not implemented !");
@@ -877,7 +911,7 @@ void Parser::variant_part(Attributes& atts){
     println("No type name (",lexer.getToken().id,") exists !");
     exit(EXIT_FAILURE);
   }
-  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != STRING_TYPE){
+  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != CONST_STR_TYPE){
     println("The tag variable should be either a int, a real or a string !");
     exit(EXIT_FAILURE);
   }
@@ -1136,9 +1170,9 @@ std::shared_ptr<Type> Parser::expression(){
       auto type_b = simple_expression();
       check_store_comparison(type_a,type_b);
     }break;
-    default: break;
+    default: return type_a;
   }
-  return type_a;
+  return get_type("boolean");
 }
 
 void Parser::check_store_comparison(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
@@ -1168,10 +1202,6 @@ void Parser::check_store_comparison(std::shared_ptr<Type> a, std::shared_ptr<Typ
   }
   if(a->type == CHAR_TYPE && b->type == CHAR_TYPE){
     vm.add_inst(TESTC_OP);
-    return;
-  }
-  if(a->type == STRING_TYPE && b->type == STRING_TYPE){
-    vm.add_inst(TESTS_OP);
     return;
   }
   if(a->type == ENUM_TYPE && b->type == ENUM_TYPE){
@@ -1299,15 +1329,6 @@ void Parser::check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TO
     }
     return;
   }
-  if(a->type == STRING_TYPE && b->type == STRING_TYPE){
-    switch(tt){
-      case PLUS_TOKEN: vm.add_inst(ADDS_OP); break;
-      default :
-        println("Summation operations for strings are + only !");
-        exit(EXIT_FAILURE);
-    }
-    return;
-  }
   println("Unsupported summation between different types !");
   exit(EXIT_FAILURE);
 }
@@ -1413,13 +1434,69 @@ std::shared_ptr<Type> Parser::factor(){
       return get_type("real");
     }break;
     case STRING_LITERAL_TOKEN:{
-      vm.add_inst(PUSHS_OP);
-      vm.write_const_string(token.id);
-      lexer.next_sym();
-      return get_type("string");
+      std::string s = lexer.getToken().id;
+      if(s.length() == 0){
+        println("Const strings'lengths should be greater than 0 !");
+        exit(EXIT_FAILURE);
+      }
+      for(uint i = 0;i < s.length();++i){
+        vm.add_inst(PUSH_CONST_OP);
+        println("Here ?");
+        vm.add_data((char)s[i]);
+      }
+      return std::shared_ptr<Type>(get_array(
+        std::vector<std::shared_ptr<Type>>{get_subrange(0,(Int)s.length()-1)},
+        get_type("char")));
     }break;
     //case NIL_TOKEN:
-    //case ID_TOKEN:
+    //should check if ID is var or function call
+    case ID_TOKEN:{
+      auto c = get_constant(token.id);
+      std::shared_ptr<EnumType> enum_type;
+      if(c){
+        lexer.next_sym();
+        switch(c->type){
+          case REAL_TYPE:{
+            vm.add_inst(PUSH_OP);
+            vm.add_data(c->loc);
+            return get_type("real");
+          }break;
+          case INT_TYPE:{
+            vm.add_inst(PUSH_OP);
+            vm.add_data(c->loc);
+            return get_type("int");
+          }break;
+          case CONST_STR_TYPE:{
+            std::string s = std::get<std::string>(c->value);
+            if(s.length() == 0){
+              println("Const strings'lengths should be greater than 0 !");
+              exit(EXIT_FAILURE);
+            }
+            for(uint i = 0;i < s.length();++i){
+              vm.add_inst(PUSH_CONST_OP);
+              vm.add_data((char)s[i]);
+            }
+            return std::shared_ptr<Type>(get_array(
+              std::vector<std::shared_ptr<Type>>{get_subrange(0,(Int)s.length()-1)},
+              get_type("char")));
+          } break;
+        }
+      }else if((enum_type = get_enum_value(token.id))){
+        lexer.next_sym();
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((int)enum_type->ids[token.id]);
+        return std::dynamic_pointer_cast<Type>(enum_type);
+      }else{
+        auto v = variable_access();
+        if(v){
+          vm.add_inst(GET_VAL_OP);
+          return v;
+        }else{
+          println("No variable or constant or enum value named '", token.id, "' exists !");
+          exit(EXIT_FAILURE);
+        }
+      }
+    }break;
     case LP_TOKEN:{
       lexer.next_sym();
       auto res = expression();
@@ -1453,25 +1530,494 @@ std::shared_ptr<Type> Parser::factor(){
 
 void Parser::statement_part(){
   // lexer.next_sym();
-  auto t = expression();
-  switch(t->type){
-    case INT_TYPE:{
-      vm.add_inst(PUSH_CONST_OP);
-      vm.add_data(INT_STD);
-      vm.add_inst(WRITE_OP);
+  // auto t = expression();
+  // switch(t->type){
+  //   case INT_TYPE:{
+  //     vm.add_inst(PUSH_CONST_OP);
+  //     vm.add_data(INT_STD);
+  //     vm.add_inst(WRITE_OP);
+  //   }break;
+  //   case REAL_TYPE:{
+  //     vm.add_inst(PUSH_CONST_OP);
+  //     vm.add_data(REAL_STD);
+  //     vm.add_inst(WRITE_OP);
+  //   }break;
+  //   case BOOLEAN_TYPE:{
+  //     vm.add_inst(PUSH_CONST_OP);
+  //     vm.add_data(UINT_STD);
+  //     vm.add_inst(WRITE_OP);
+  //   }break;
+  //   case UINT_TYPE:
+  //   case CHAR_TYPE:
+  //     vm.add_inst(PUSH_CONST_OP);
+  //     vm.add_data(CHAR_STD);
+  //     vm.add_inst(WRITE_OP);
+  //     break;
+  // }
+  // vm.add_inst(HALT_OP);
+  // vm.run();
+  match(BEGIN_TOKEN);
+  lexer.next_sym();
+  statement_sequence();
+  match(END_TOKEN);
+  lexer.next_sym();
+}
+
+void Parser::statement_sequence(){
+  statement();
+  while(lexer.getToken().type == SEMI_TOKEN){
+    lexer.next_sym();
+    statement();
+  }
+}
+
+void Parser::statement(){
+  if(lexer.getToken().type == NUM_INT_TOKEN){
+    Int id = lexer.getToken().ival;
+    get_label(id).loc = (uint)vm.bytecode.size();
+    match_adv(COLON_TOKEN);
+    lexer.next_sym();
+  }
+  auto token = lexer.getToken();
+  switch(token.type){
+    // Should handle functions and procedures
+    case ID_TOKEN:{
+      auto var = get_variable(token.id);
+      if(var){
+        assignment_statement();
+      }else{
+        println("No variable '",token.id,"' exists !");
+        exit(EXIT_FAILURE);
+      }
     }break;
-    case REAL_TYPE:{
+    case READ_TOKEN:
+    case WRITE_TOKEN: procedure_statement(); break;
+    case GOTO_TOKEN: goto_statement(); break;
+    case BEGIN_TOKEN: statement_part(); break;
+    case WHILE_TOKEN: while_statement(); break;
+    case REPEAT_TOKEN: repeat_statement(); break;
+    case FOR_TOKEN: for_statement(); break;
+    case IF_TOKEN: if_statement(); break;
+    // case CASE_TOKEN: case_statement(); break;
+    default:
+      matches({
+        ID_TOKEN,
+        READ_TOKEN,
+        WRITE_TOKEN,
+        GOTO_TOKEN,
+        BEGIN_TOKEN,
+        WHILE_TOKEN,
+        REPEAT_TOKEN,
+        FOR_TOKEN,
+        IF_TOKEN,
+        CASE_TOKEN
+      });
+  }
+}
+// Should handle functions and procedures
+void Parser::assignment_statement(){
+  match(ID_TOKEN);
+  std::string name = lexer.getToken().id;
+  auto v = variable_access();
+  if(!v){
+    println("No variable named'",name,"' exists !");
+    exit(EXIT_FAILURE);
+  }
+  match(ASSIGN_TOKEN);
+  lexer.next_sym();
+  auto e = expression();
+  assign_var(v,e);
+}
+
+void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
+  if(a->type == b->type){
+    switch(a->type){
+      case INT_TYPE:
+      case UINT_TYPE:
+      case REAL_TYPE:
+      case BOOLEAN_TYPE:
+      case CHAR_TYPE:
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((uint)2);
+        vm.add_inst(REV_OP);
+        
+        vm.add_inst(MOV_OP);
+        break;
+      default:
+        println("Assignment works only on basic types !");
+        exit(EXIT_FAILURE);
+    }
+    return;
+  }
+  println("Cannot assign an expression to a variable of a different type ! (",a->name,",",b->name,")");
+  exit(EXIT_FAILURE);
+}
+
+std::shared_ptr<Type> Parser::variable_access(){
+  if(lexer.getToken().type != ID_TOKEN){
+    return nullptr;
+  }
+  auto v = get_variable(lexer.getToken().id);
+  if(!v){
+    return nullptr;
+  }
+  Var var = *v;
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data(var.loc);
+  bool in = true;
+  lexer.next_sym();
+  while(in){
+    switch(lexer.getToken().type){
+      case LB_TOKEN:{
+        var.type = array_access_(var.type);
+        // if(var.type->type == ARRAY_TYPE){
+        //   auto arr_type = std::dynamic_pointer_cast<ArrayType>(v->type);
+        //   var.type = arr_type->valueType;
+        //   if(arr_type->indexTypes.size() != vec.size()){
+        //     println("Expected ",arr_type->indexTypes.size()," indices while ",vec.size()," were provided !");
+        //     exit(EXIT_FAILURE);
+        //   }
+        //   uint total_size = 0;
+        //   for(auto& t : vec){
+        //     total_size += t->size;
+        //   }
+        //   vm.add_inst(PUSH_CONST_OP);
+        //   vm.add_data(total_size);
+        //   vm.add_inst(REV_OP);
+        //   for(uint i = 0;i < vec.size();++i){
+        //     if(arr_type->indexTypes[i]->type == ENUM_TYPE){
+        //       if(arr_type->indexTypes[i] != vec[i]){
+        //         println("Expected an enum value as ", i, "-th index for the array !");
+        //         exit(EXIT_FAILURE);
+        //       }
+        //       vm.add_inst(PUSH_CONST_OP);
+        //       vm.add_data(std::dynamic_pointer_cast<EnumType>(arr_type->indexTypes[i])->amount);
+        //       vm.add_inst(MULI_OP);
+        //     }
+        //     if(arr_type->indexTypes[i]->type == SUBRANGE_TYPE){
+        //       auto sub_type = std::dynamic_pointer_cast<SubrangeType>(arr_type->indexTypes[i]);
+        //       if(vec[i]->type == sub_type->boundsType->type ||
+        //       (vec[i]->type == SUBRANGE_TYPE &&
+        //       std::dynamic_pointer_cast<SubrangeType>(vec[i])->boundsType->type == sub_type->boundsType->type)){
+                
+        //         vm.add_inst(PUSH_CONST_OP);
+        //         if(sub_type->boundsType->type == INT_TYPE){
+        //           vm.add_data((int)sub_type->ibounds[0]);
+        //           vm.add_inst(SUBI_OP);
+
+        //           vm.add_inst(PUSH_CONST_OP);
+        //           vm.add_data((int)(sub_type->amount));
+        //         }else{
+        //           //To be checked
+        //           vm.add_data((int)sub_type->cbounds[0]);
+        //           vm.add_inst(SUBI_OP);
+
+        //           vm.add_inst(PUSH_CONST_OP);
+        //           vm.add_data((int)(sub_type->amount));
+        //         }
+        //         vm.add_inst(MULI_OP);
+        //       }else{
+        //         println("Expected as index ",i," a value of the same type as the array's index type !");
+        //         exit(EXIT_FAILURE);
+        //       }
+        //     }
+        //   }
+
+        // }else{
+        //   println("Only arrays can be indexed !");
+        //   exit(EXIT_FAILURE);
+        // }
+      }break;
+      case DOT_TOKEN:{
+        var.type = record_access_(var.type);
+      }break;
+      default: in = false; break;
+    }
+  }
+  return var.type;
+}
+
+std::shared_ptr<Type> Parser::array_access_(std::shared_ptr<Type> t){
+  if(t->type != ARRAY_TYPE){
+    println("Expected array when indexing !");
+    exit(EXIT_FAILURE);
+  }
+  auto arr_type = std::dynamic_pointer_cast<ArrayType>(t);
+  match(LB_TOKEN);
+  lexer.next_sym();
+  auto type_a = expression();
+  if(arr_type->indexTypes[0]->type == ENUM_TYPE){
+    if(arr_type->indexTypes[0] != type_a){
+      println("Expected an enum value as an index for the array !");
+      exit(EXIT_FAILURE);
+    }
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data((int)arr_type->elem_size);
+    vm.add_inst(MULI_OP);
+  }else if(arr_type->indexTypes[0]->type == SUBRANGE_TYPE){
+    auto sub_type = std::dynamic_pointer_cast<SubrangeType>(arr_type->indexTypes[0]);
+    if(type_a->type == sub_type->boundsType->type ||
+    (type_a->type == SUBRANGE_TYPE &&
+    std::dynamic_pointer_cast<SubrangeType>(type_a)->boundsType->type == sub_type->boundsType->type)){
       vm.add_inst(PUSH_CONST_OP);
-      vm.add_data(REAL_STD);
-      vm.add_inst(WRITE_OP);
+      if(sub_type->boundsType->type == INT_TYPE){
+        vm.add_data((int)sub_type->ibounds[0]);
+        vm.add_inst(SUBI_OP);
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((int)arr_type->elem_size);
+      }else{
+        //To be checked
+        vm.add_data((int)sub_type->cbounds[0]);
+        vm.add_inst(SUBI_OP);
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((int)arr_type->elem_size);
+      }
+      vm.add_inst(MULI_OP);
+    }else{
+      println("Expected as index a value of the same type as the array's index type !");
+      exit(EXIT_FAILURE);
+    }
+  }
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)UINT_STD);
+  vm.add_inst(CONVI_OP);
+
+  vm.add_inst(ADDU_OP);
+  if(lexer.getToken().type == SEMI_TOKEN){
+    println("Array access currently supports 1 dim arrays only !");
+    exit(EXIT_FAILURE);
+  }
+  match(RB_TOKEN);
+  lexer.next_sym();
+  return arr_type->valueType;
+}
+
+std::shared_ptr<Type> Parser::record_access_(std::shared_ptr<Type> t){
+  if(t->type != RECORD_TYPE){
+    println("Only records have attributes !");
+    exit(EXIT_FAILURE);
+  }
+  match(DOT_TOKEN);
+  match_adv(ID_TOKEN);
+  std::string attribute_name = lexer.getToken().id;
+  auto rec_type = std::dynamic_pointer_cast<RecordType>(t);
+  if(!rec_type->attributes.contains(attribute_name)){
+    println("Attribute '",attribute_name,"' does not exist for type '",rec_type->name,"' !");
+    exit(EXIT_FAILURE);
+  }
+  Var v = rec_type->attributes[attribute_name];
+
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)v.loc);
+  vm.add_inst(ADDU_OP);
+
+  lexer.next_sym();  
+  return v.type;
+}
+//Should deal with procedures
+void Parser::procedure_statement(){
+  switch(lexer.getToken().type){
+  case READ_TOKEN:{
+    auto tt = lexer.getToken().type;
+    if(lexer.next_sym().type == LP_TOKEN){
+      do{
+        lexer.next_sym();
+        auto t = variable_access();
+        if(!t){
+          println("Can read variables only !");
+        }
+        vm.add_inst(PUSH_ADDR_OP);
+        switch(t->type){
+          case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
+          case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
+          case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
+          case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
+          case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
+          default:
+            println("Expected basic type for reading/writing data !");
+            exit(EXIT_FAILURE);
+        }
+        vm.add_inst(READ_OP);
+      }while(lexer.getToken().type == COMMA_TOKEN);
+      match(RP_TOKEN);
+      lexer.next_sym();
+    }
+  }break;
+  case WRITE_TOKEN:{
+    auto tt = lexer.getToken().type;
+    if(lexer.next_sym().type == LP_TOKEN){
+      do{
+        lexer.next_sym();
+        auto t = expression();
+        vm.add_inst(PUSH_CONST_OP);
+        switch(t->type){
+          case INT_TYPE:  vm.add_data((uint)INT_STD); break;  
+          case UINT_TYPE: vm.add_data((uint)UINT_STD);  break;
+          case REAL_TYPE: vm.add_data((uint)REAL_STD);  break;
+          case BOOLEAN_TYPE:  vm.add_data((uint)UCHAR_STD);  break;
+          case CHAR_TYPE: vm.add_data((uint)CHAR_STD);  break;
+          default:
+            println("Expected basic type for reading/writing data !");
+            exit(EXIT_FAILURE);
+        }
+        vm.add_inst(WRITE_OP);
+      }while(lexer.getToken().type == COMMA_TOKEN);
+      println("Here : ", token_type_name[lexer.getToken().type]);
+      match(RP_TOKEN);
+      lexer.next_sym();
+    }
+  }break;
+    // case ID_TOKEN:
+  default:
+    println("Procedure calls not implemented except read and write !");
+    exit(EXIT_FAILURE);
+  }
+}
+
+void Parser::goto_statement(){
+  match(GOTO_TOKEN);
+  match_adv(NUM_INT_TOKEN);
+  Label l = get_label(lexer.getToken().ival);
+  if(l.loc == -1){
+    println("The label has been declared but not yet defined !");
+    exit(EXIT_FAILURE);
+  }
+  vm.add_inst(JMP_OP);
+  vm.add_data((uint)l.loc);
+  lexer.next_sym();
+}
+
+void Parser::while_statement(){
+  match(WHILE_TOKEN);
+  lexer.next_sym();
+  uint beg = (uint)vm.bytecode.size();
+  println("In while !");
+  auto t = expression();
+  if(t->type != BOOLEAN_TYPE){
+    println("For conditions only booleans are accepted !");
+    exit(EXIT_FAILURE);
+  }
+  println("In while !");
+  match(DO_TOKEN);
+  lexer.next_sym();
+
+  vm.add_inst(JMPFALSE_OP);
+  uint end = vm.add_data(0);
+  
+  statement();
+  
+  vm.add_inst(JMP_OP);
+  vm.add_data((uint)beg);
+  
+  vm.bytecode[end] = (uint)vm.bytecode.size();
+}
+
+void Parser::repeat_statement(){
+  uint beg = (uint)vm.bytecode.size();
+
+  match(REPEAT_TOKEN);
+  lexer.next_sym();
+  statement_sequence();
+  match(UNTIL_TOKEN);
+  lexer.next_sym();
+  auto t = expression();
+  if(t->type != BOOLEAN_TYPE){
+    println("For conditions only booleans are accepted !");
+    exit(EXIT_FAILURE);
+  }
+  vm.add_inst(JMPFALSE_OP);
+  vm.add_data((uint)beg);
+}
+
+void Parser::for_statement(){
+  match(FOR_TOKEN);
+  match_adv(ID_TOKEN);
+  std::string name = lexer.getToken().id;
+  auto var = variable_access();
+  if(!var){
+    println("No variable named '",name,"' exists !");
+    exit(EXIT_FAILURE);
+  }
+  vm.add_inst(DUPL_OP);
+  match(ASSIGN_TOKEN);
+  lexer.next_sym();
+  auto e1 = expression();
+  assign_var(var,e1);
+  matches({TO_TOKEN,DOWNTO_TOKEN});
+  lexer.next_sym();
+  uint beg = (uint)vm.bytecode.size();
+  vm.add_inst(DUPL_OP); // 2 addresses of var at this point at the top of the stack
+  vm.add_inst(GET_VAL_OP);
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)LT_FLAG);
+  auto e = expression();
+  check_store_comparison(var,e);
+  vm.add_inst(JMPFALSE_OP);
+  uint end = vm.add_data(0);
+  match(DO_TOKEN);
+  lexer.next_sym();
+  statement();
+  vm.add_inst(DUPL_OP);
+  vm.add_inst(DUPL_OP);
+
+  vm.add_inst(GET_VAL_OP);
+
+  vm.add_inst(PUSH_CONST_OP);
+  switch(var->type){
+    case INT_TYPE:{
+      vm.add_data((int)1);
+      vm.add_inst(ADDI_OP);
+    }break;
+    case UINT_TYPE:{
+      vm.add_data((uint)1);
+      vm.add_inst(ADDU_OP);
+    }break; 
+    case CHAR_TYPE:{
+      vm.add_data((char)1);
+      vm.add_inst(ADDI_OP);
     }break;
     case BOOLEAN_TYPE:{
-      vm.add_inst(PUSH_CONST_OP);
-      vm.add_data(UCHAR_STD);
-      vm.add_inst(WRITE_OP);
+      vm.add_data((u_char)1);
+      vm.add_inst(ADDB_OP);
     }break;
-    case UINT_TYPE:
-    case CHAR_TYPE:
+    default:
+      println("For loop accepts only ints,uints,chars and bytes !");
+      exit(EXIT_FAILURE);
   }
-  vm.run();
+
+  vm.add_inst(PUSH_CONST_OP);
+  vm.add_data((uint)2);
+  vm.add_inst(REV_OP);
+
+  vm.add_inst(MOV_OP);  
+
+
+  vm.add_inst(JMP_OP);
+  vm.add_data((uint)beg);
+  vm.bytecode[end] = (uint)vm.add_inst(POP_OP);
+}
+
+void Parser::if_statement(){
+  match(IF_TOKEN);
+  lexer.next_sym();
+  auto t = expression();
+  if(t->type != BOOLEAN_TYPE){
+    println("For conditions only booleans are accepted !");
+    exit(EXIT_FAILURE);
+  }
+  vm.add_inst(JMPFALSE_OP);
+  uint ELSE = vm.add_data(0);
+  match(THEN_TOKEN);
+  lexer.next_sym();
+  statement();
+  
+  vm.add_inst(JMP_OP);
+  uint end = vm.add_data(0);
+
+  vm.bytecode[ELSE] = (uint)vm.bytecode.size();
+  if(lexer.getToken().type == ELSE_TOKEN){
+    lexer.next_sym();
+    statement();
+  }
+  vm.bytecode[end] = (uint)vm.bytecode.size();
 }

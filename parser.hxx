@@ -161,30 +161,29 @@ void procedure_declaration(); // procedure_declaration := PROCEDURE NAME [ forma
 void function_declaration();  // function_declaration := FUNCTION NAME [ formal_parameter_list ] ':' TYPE_NAME ';' block .
 void statement_part();  // statement_part := BEGIN statement_sequence END
 void statement_sequence(); // statement_sequence := statement { ';' statement }
-void statement(); // statement := [ LABEL ':' ] ( simple_statement | structured_statement )
+void statement(); // statement := [ LABEL_ID ':' ] ( simple_statement | structured_statement )
 void simple_statement(); // simple_statement := [ assignment_statement | procedure_statement
 // | goto_statement ]
-void assignment_statement(); // assignment_statement := ( variable_access | FUNCTION_NAME ) ':=' expression
-void variable_access();      // variable_access := ACCESS_NAME { end_access_ }
-void end_access_(); // end_access_ := { array_access_ | record_access_ | '^' | function_parameters_ }
-void array_access_(); // array_access_ := '[' expression { ',' expression } ']'
+void assignment_statement(); // assignment_statement := ( variable_access | FUNCTION_NAME | PROCEDURE_NAME ) ':=' expression
+std::shared_ptr<Type> variable_access(); // variable_access := ACCESS_NAME { array_access_ | record_access_  | function_parameters_ }
+std::shared_ptr<Type> array_access_(std::shared_ptr<Type>); // array_access_ := '[' expression { ',' expression } ']'
 std::shared_ptr<Type> expression(); // expression := simple_expression [ relational_operator simple_expression ]
 // relational_operator= '=' | '<>' | '<' | '<=' | '>' | '>='
 std::shared_ptr<Type> simple_expression(); // simple_expression := [ '+' | '-' ] term { addition_operator term }
 // addition_operator := '+' | '-' | OR
 std::shared_ptr<Type> term(); // term := factor { multiplication_operator factor }
 // multiplication_operator := '*' | '/' | DIV | AND .
-std::shared_ptr<Type> factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME
+std::shared_ptr<Type> factor(); // factor := NUMBER | STRING | NIL | CONSTANT_NAME | ENUM_VALUE
 // | variable_access | function_designator
 // | '(' expression ')' | NOT factor 
-void set(); // set := '[' expression { ',' expression } ']' 
 void function_designator(); // function_designator := FUNCTION_NAME [ actual_parameter_list ]
-void actual_parameter_list(); // actual_parameter_list := '(' actual_parameter { ',' actual_parameter } ')'
-void actual_parameter(); // actual_parameter := expression | variable_access | PROCEDURE_NAME
+std::shared_ptr<Type> actual_parameter_list(); // actual_parameter_list := '(' actual_parameter { ',' actual_parameter } ')'
+std::shared_ptr<Type> actual_parameter();      // actual_parameter := expression | variable_access | PROCEDURE_NAME
 // | FUNCTION_NAME .
-void record_access_(); // record_access_ := '.' variable_access
+std::shared_ptr<Type> record_access_(std::shared_ptr<Type> t); // record_access_ := '.' ATTRIBUTE_NAME
 void function_parameters_(); // function_parameters_ := '(' [ expression { ',' expression } ] ')'
-void procedure_statement();  // procedure_statement := (PROCEDURE_NAME | 'read' | 'write')  [ actual_parameter_list ]
+void procedure_statement();  // procedure_statement := ((PROCEDURE_NAME | 'write')  [ '(' actual_parameter { ',' actual_parameter } ')' ])
+// | 'read' '(' variable_access {',' variable_access } ')'
 void goto_statement(); // goto_statement := GOTO NUMBER
 void structured_statement(); // structured_statement := compound_statement | repetitive_statement
 // | conditional_statement .
@@ -193,7 +192,7 @@ void repetitive_statement(); // // repetitive_statement := while_statement | rep
 // | for_statement .
 void while_statement(); // while_statement := WHILE expression DO statement
 void repeat_statement(); // repeat_statement := REPEAT statement_sequence UNTIL expression
-void for_statement(); // for_statement := FOR VARIABLE_NAME ':=' expression
+void for_statement(); // for_statement := FOR variable_access ':=' expression
 // ( TO | DOWNTO ) expression DO statement
 void conditional_statement(); // conditional_statement := if_statement | case_statement
 void if_statement(); // if_statement := IF expression THEN statement [ ELSE statement ]
@@ -213,6 +212,7 @@ void quit_if_label_id_used(Int id);
 void quit_if_id_is_used(const std::string& id);
 
 std::shared_ptr<Const> get_constant(const std::string& id);
+std::shared_ptr<Var> get_variable(const std::string& id);
 std::shared_ptr<Type> get_type(const std::string& id);
 
 inline std::string name_subrange(Int lower,Int upper){
@@ -225,6 +225,7 @@ inline std::string name_subrange(char lower,char upper){
 std::shared_ptr<SubrangeType> get_subrange(Int lower,Int upper);
 std::shared_ptr<SubrangeType> get_subrange(char lower,char upper);
 std::shared_ptr<EnumType> get_enum(std::vector<std::string> &&v);
+std::shared_ptr<EnumType> get_enum_value(const std::string &name);
 std::shared_ptr<ArrayType> get_array(
   const std::vector<std::shared_ptr<Type>>& indexTypes,
   std::shared_ptr<Type> valueType
@@ -245,6 +246,7 @@ uint store_variable(std::shared_ptr<Type> t);
 void check_store_comparison(std::shared_ptr<Type> a,std::shared_ptr<Type> b);
 void check_store_sum(std::shared_ptr<Type> a, std::shared_ptr<Type> b,TOKEN_TYPE tt);
 void check_store_mul(std::shared_ptr<Type> a, std::shared_ptr<Type> b, TOKEN_TYPE tt);
+void assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b);
 
 public:
   std::deque<Info> infos;
