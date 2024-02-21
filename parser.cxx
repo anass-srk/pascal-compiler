@@ -2182,10 +2182,10 @@ void Parser::case_statement(){
   switch(e->type){
     case INT_TYPE: 
     case REAL_TYPE:
-    // case CHAR_TYPE:
+    case CHAR_TYPE:
     break;
     default:
-      println("Can compare ints and floats only !");
+      println("Can compare chars, ints and floats only !");
       exit(EXIT_FAILURE);
   }
   match(OF_TOKEN);
@@ -2195,6 +2195,7 @@ void Parser::case_statement(){
     lexer.next_sym();
     auto constants = case_label_list();
     std::vector<uint> elems;
+    std::vector<uint> local_ends;
     for(auto &c : constants){
       if(all_consts.contains(c.value)){
         print("This constant has already been used ! (");
@@ -2228,8 +2229,11 @@ void Parser::case_statement(){
           exit(EXIT_FAILURE);
       }
       check_store_comparison(e,t);
+      vm.add_inst(DUPL_OP);
       vm.add_inst(JMPTRUE_OP);
       elems.push_back(vm.add_data(0));
+      vm.add_inst(JMPFALSE_OP);
+      local_ends.push_back(vm.add_data(0));
     }
 
     match(COLON_TOKEN);
@@ -2238,9 +2242,11 @@ void Parser::case_statement(){
       vm.bytecode[elem] = (uint)vm.bytecode.size();
     }
     statement();
-    elems.clear();
     vm.add_inst(JMP_OP);
     ends.push_back(vm.add_data(0));
+    for(auto l : local_ends){
+      vm.bytecode[l] = (uint)vm.bytecode.size();
+    }
   }while(lexer.getToken().type != END_TOKEN);
   for(auto &end : ends){
     vm.bytecode[end] = (uint)vm.bytecode.size();

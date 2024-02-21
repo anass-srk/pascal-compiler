@@ -7,7 +7,7 @@
 #include <stack>
 #include <set>
 
-constexpr bool debug = false;
+constexpr bool debug = true;
 
 template <printable... Args>
 void Print(Args &&...args){
