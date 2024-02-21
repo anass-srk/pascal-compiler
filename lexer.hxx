@@ -102,7 +102,8 @@ enum TOKEN_TYPE{
   NUM_INT_TOKEN,
   NUM_REAL_TOKEN,
   EOF_TOKEN,
-  ERROR_TOKEN
+  ERROR_TOKEN,
+  CHAR_LITERAL_TOKEN
 };
 
 static const std::string token_type_name[] = {
@@ -175,7 +176,8 @@ static const std::string token_type_name[] = {
   "NUM_INT_TOKEN",
   "NUM_REAL_TOKEN",
   "EOF_TOKEN",
-  "ERROR_TOKEN"
+  "ERROR_TOKEN",
+  "CHAR_LITERAL_TOKEN"
 };
 
 struct Lexeme{

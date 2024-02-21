@@ -222,8 +222,23 @@ Lexeme& Lexer::next_sym(){
   }if(isdigit(current_char)){
     read_number();
     return token;
-  }if(current_char == '\''){
+  }if(current_char == '"'){
     read_string();
+    return token;
+  }if(current_char == '\''){
+    read_char();
+    token.id = current_char;
+    if(token.id == "\\" && current_char != EOF){
+      read_char();
+      token.id = '\n';
+    }
+    read_char();
+    if(current_char != '\''){
+      println("Invalid char !");
+      exit(EXIT_FAILURE);
+    }
+    token.type = CHAR_LITERAL_TOKEN;
+    read_char();
     return token;
   }else{
     token.id = current_char;

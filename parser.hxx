@@ -196,7 +196,7 @@ void for_statement(); // for_statement := FOR variable_access ':=' expression
 // ( TO | DOWNTO ) expression DO statement
 void conditional_statement(); // conditional_statement := if_statement | case_statement
 void if_statement(); // if_statement := IF expression THEN statement [ ELSE statement ]
-void case_statement(); // case_statement := CASE expression OF case_element { ';' case_element }
+void case_statement(); // case_statement := CASE expression OF case_label_list ':' statement { ';' case_label_list ':' statement }
 //  [';' ELSE statement_sequence ] END
 void case_element(); // case_element := case_label_list ':' statement
 

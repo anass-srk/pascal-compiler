@@ -485,6 +485,7 @@ void Parser::store_constants(){
     switch(c->type){
       case INT_TYPE: c->loc = vm.add_data((int)std::get<Int>(c->value)); break;
       case REAL_TYPE: c->loc = vm.add_data((float)std::get<double>(c->value)); break;
+      case CHAR_TYPE: c->loc = vm.add_data((char)std::get<std::string>(c->value)[0]); break;
       case CONST_STR_TYPE:{
         std::string s = std::get<std::string>(c->value);
         if(s.length() == 0){
@@ -612,7 +613,7 @@ Const Parser::constant(){
   if(neg || pos){
     matches_adv({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN});
   }else{
-    matches({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN,STRING_LITERAL_TOKEN});
+    matches({ID_TOKEN,NUM_INT_TOKEN,NUM_REAL_TOKEN,CHAR_LITERAL_TOKEN,STRING_LITERAL_TOKEN});
   }
   Const c;
   if(t.type == ID_TOKEN){
@@ -631,6 +632,10 @@ Const Parser::constant(){
       case NUM_REAL_TOKEN:
         c.type = REAL_TYPE;
         c.value = t.dval;
+        break;
+      case CHAR_LITERAL_TOKEN:
+        c.type = CHAR_TYPE;
+        c.value = t.id;
         break;
       case STRING_LITERAL_TOKEN:
         c.type = CONST_STR_TYPE;
@@ -683,6 +688,7 @@ std::shared_ptr<Type> Parser::type(){
     case NUM_INT_TOKEN:
     case NUM_REAL_TOKEN:
     case STRING_LITERAL_TOKEN:
+    case CHAR_LITERAL_TOKEN:
     case LP_TOKEN:
       return simple_type();
       break;
@@ -718,6 +724,7 @@ std::shared_ptr<Type> Parser::type(){
         NUM_INT_TOKEN,
         NUM_REAL_TOKEN,
         STRING_LITERAL_TOKEN,
+        CHAR_LITERAL_TOKEN,
         LP_TOKEN,
         PACKED_TOKEN,
         ARRAY_TOKEN,
@@ -772,11 +779,7 @@ std::shared_ptr<SubrangeType> Parser::subrange_type(){
   if(lower_bound.type == INT_TYPE){
     return get_subrange(get<Int>(lower_bound.value),get<Int>(upper_bound.value));
   }
-  if(
-    lower_bound.type == CONST_STR_TYPE &&
-    get<std::string>(lower_bound.value).length() == 1 &&
-    get<std::string>(upper_bound.value).length() == 1
-  )
+  if(lower_bound.type == CHAR_TYPE)
   {
     return get_subrange(get<std::string>(lower_bound.value)[0], get<std::string>(upper_bound.value)[0]);
   }
@@ -911,8 +914,8 @@ void Parser::variant_part(Attributes& atts){
     println("No type name (",lexer.getToken().id,") exists !");
     exit(EXIT_FAILURE);
   }
-  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != CONST_STR_TYPE){
-    println("The tag variable should be either a int, a real or a string !");
+  if(t->type != INT_TYPE && t->type != REAL_TYPE && t->type != CHAR_TYPE){
+    println("The tag variable should be either a int, a real or a char !");
     exit(EXIT_FAILURE);
   }
   atts[name] = t;
@@ -1433,17 +1436,21 @@ std::shared_ptr<Type> Parser::factor(){
       lexer.next_sym();
       return get_type("real");
     }break;
+    case CHAR_LITERAL_TOKEN:{
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((char)token.id[0]);
+      lexer.next_sym();
+      return get_type("char");
+    }break;
     case STRING_LITERAL_TOKEN:{
       std::string s = lexer.getToken().id;
       if(s.length() == 0){
         println("Const strings'lengths should be greater than 0 !");
         exit(EXIT_FAILURE);
       }
-      println("_LEN_ : ",s.length());
       for(uint i = 0;i < s.length();++i){
         vm.add_inst(PUSH_CONST_OP);
         vm.add_data((char)s[i]);
-        println("PUSHED ",s[i]);
       }
       lexer.next_sym();
       return std::shared_ptr<Type>(get_array(
@@ -1467,6 +1474,11 @@ std::shared_ptr<Type> Parser::factor(){
             vm.add_inst(PUSH_OP);
             vm.add_data(c->loc);
             return get_type("int");
+          }break;
+          case CHAR_TYPE:{
+            vm.add_inst(PUSH_OP);
+            vm.add_data(c->loc);
+            return get_type("char");
           }break;
           case CONST_STR_TYPE:{
             std::string s = std::get<std::string>(c->value);
@@ -1521,6 +1533,7 @@ std::shared_ptr<Type> Parser::factor(){
         NUM_INT_TOKEN,
         NUM_REAL_TOKEN,
         STRING_LITERAL_TOKEN,
+        CHAR_LITERAL_TOKEN,
         //NIL_TOKEN,
         //ID_TOKEN,
         LP_TOKEN,
@@ -1600,7 +1613,7 @@ void Parser::statement(){
     case REPEAT_TOKEN: repeat_statement(); break;
     case FOR_TOKEN: for_statement(); break;
     case IF_TOKEN: if_statement(); break;
-    // case CASE_TOKEN: case_statement(); break;
+    case CASE_TOKEN: case_statement(); break;
     default:
       matches({
         ID_TOKEN,
@@ -2113,7 +2126,7 @@ void Parser::for_statement(){
     }break; 
     case CHAR_TYPE:{
       vm.add_data((char)1);
-      vm.add_inst(ADDI_OP);
+      vm.add_inst(ADDC_OP);
     }break;
     case BOOLEAN_TYPE:{
       vm.add_data((u_char)1);
@@ -2159,4 +2172,79 @@ void Parser::if_statement(){
     statement();
   }
   vm.bytecode[end] = (uint)vm.bytecode.size();
+}
+
+void Parser::case_statement(){
+  match(CASE_TOKEN);
+  lexer.next_sym();
+  auto e = expression();
+  println("EXP : ",e->type);
+  switch(e->type){
+    case INT_TYPE: 
+    case REAL_TYPE:
+    // case CHAR_TYPE:
+    break;
+    default:
+      println("Can compare ints and floats only !");
+      exit(EXIT_FAILURE);
+  }
+  match(OF_TOKEN);
+  std::vector<uint> ends;
+  std::set<decltype(Const::value)> all_consts;
+  do{
+    lexer.next_sym();
+    auto constants = case_label_list();
+    std::vector<uint> elems;
+    for(auto &c : constants){
+      if(all_consts.contains(c.value)){
+        print("This constant has already been used ! (");
+        std::visit([](auto& v){println(v,")");},c.value);
+        exit(EXIT_FAILURE);
+      }
+      all_consts.emplace(c.value);
+
+      vm.add_inst(DUPL_OP);
+
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((uint)EQ_FLAG);
+
+      vm.add_inst(PUSH_CONST_OP);
+      std::shared_ptr<Type> t;
+      switch(c.type){
+        case INT_TYPE:{
+          t = get_type("int");
+          vm.add_data((int)std::get<Int>(c.value));
+        }break;
+        case REAL_TYPE:{
+          t = get_type("real");
+          vm.add_data((float)std::get<double>(c.value));
+        }break;
+        case CHAR_TYPE:{
+          t = get_type("char");
+          vm.add_data((char)std::get<std::string>(c.value)[0]);
+        }break;
+        default:
+          println("Expected an int, a real of a char in case statements !");
+          exit(EXIT_FAILURE);
+      }
+      check_store_comparison(e,t);
+      vm.add_inst(JMPTRUE_OP);
+      elems.push_back(vm.add_data(0));
+    }
+
+    match(COLON_TOKEN);
+    lexer.next_sym();
+    for(auto elem : elems){
+      vm.bytecode[elem] = (uint)vm.bytecode.size();
+    }
+    statement();
+    elems.clear();
+    vm.add_inst(JMP_OP);
+    ends.push_back(vm.add_data(0));
+  }while(lexer.getToken().type != END_TOKEN);
+  for(auto &end : ends){
+    vm.bytecode[end] = (uint)vm.bytecode.size();
+  }
+  match(END_TOKEN);
+  lexer.next_sym();
 }
