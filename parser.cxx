@@ -1746,14 +1746,17 @@ std::shared_ptr<Type> Parser::array_access_(std::shared_ptr<Type> t){
   match(LB_TOKEN);
   lexer.next_sym();
   auto type_a = expression();
+  uint size = arr_type->elem_size;
   if(arr_type->indexTypes[0]->type == ENUM_TYPE){
     if(arr_type->indexTypes[0] != type_a){
       println("Expected an enum value as an index for the array !");
       exit(EXIT_FAILURE);
     }
     vm.add_inst(PUSH_CONST_OP);
-    vm.add_data((int)arr_type->elem_size);
+    vm.add_data((int)size);
     vm.add_inst(MULI_OP);
+
+    size *= std::dynamic_pointer_cast<EnumType>(arr_type->indexTypes[0])->amount;
   }else if(arr_type->indexTypes[0]->type == SUBRANGE_TYPE){
     auto sub_type = std::dynamic_pointer_cast<SubrangeType>(arr_type->indexTypes[0]);
     if(type_a->type == sub_type->boundsType->type ||
@@ -1764,15 +1767,16 @@ std::shared_ptr<Type> Parser::array_access_(std::shared_ptr<Type> t){
         vm.add_data((int)sub_type->ibounds[0]);
         vm.add_inst(SUBI_OP);
         vm.add_inst(PUSH_CONST_OP);
-        vm.add_data((int)arr_type->elem_size);
+        vm.add_data((int)size);
       }else{
         //To be checked
         vm.add_data((int)sub_type->cbounds[0]);
         vm.add_inst(SUBI_OP);
         vm.add_inst(PUSH_CONST_OP);
-        vm.add_data((int)arr_type->elem_size);
+        vm.add_data((int)size);
       }
       vm.add_inst(MULI_OP);
+      size *= sub_type->amount;
     }else{
       println("Expected as index a value of the same type as the array's index type !");
       exit(EXIT_FAILURE);
@@ -1783,10 +1787,64 @@ std::shared_ptr<Type> Parser::array_access_(std::shared_ptr<Type> t){
   vm.add_inst(CONVI_OP);
 
   vm.add_inst(ADDU_OP);
-  if(lexer.getToken().type == SEMI_TOKEN){
-    println("Array access currently supports 1 dim arrays only !");
-    exit(EXIT_FAILURE);
+
+  uint i = 1;
+  while(lexer.getToken().type == COMMA_TOKEN){
+    if(i >= arr_type->indexTypes.size()){
+      break;
+    }
+    lexer.next_sym();
+    type_a = expression();
+    if (arr_type->indexTypes[i]->type == ENUM_TYPE){
+      if (arr_type->indexTypes[i] != type_a){
+        println("Expected an enum value as an index for the array !");
+        exit(EXIT_FAILURE);
+      }
+      vm.add_inst(PUSH_CONST_OP);
+      vm.add_data((int)size);
+      vm.add_inst(MULI_OP);
+
+      size *= std::dynamic_pointer_cast<EnumType>(arr_type->indexTypes[i])->amount;
+    }
+    else if (arr_type->indexTypes[i]->type == SUBRANGE_TYPE){
+      auto sub_type = std::dynamic_pointer_cast<SubrangeType>(arr_type->indexTypes[i]);
+      if (type_a->type == sub_type->boundsType->type ||
+          (type_a->type == SUBRANGE_TYPE &&
+          std::dynamic_pointer_cast<SubrangeType>(type_a)->boundsType->type == sub_type->boundsType->type))
+      {
+        vm.add_inst(PUSH_CONST_OP);
+        if (sub_type->boundsType->type == INT_TYPE){
+          vm.add_data((int)sub_type->ibounds[0]);
+          vm.add_inst(SUBI_OP);
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((int)size);
+        }
+        else{
+          // To be checked
+          vm.add_data((int)sub_type->cbounds[0]);
+          vm.add_inst(SUBI_OP);
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((int)size);
+        }
+        vm.add_inst(MULI_OP);
+        size *= sub_type->amount;
+      }
+      else{
+        println("Expected as index a value of the same type as the array's index type !");
+        exit(EXIT_FAILURE);
+      }
+    }
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data((uint)UINT_STD);
+    vm.add_inst(CONVI_OP);
+
+    vm.add_inst(ADDU_OP);
   }
+
+  // if(lexer.getToken().type == COMMA_TOKEN){
+  //   println("Array access currently supports 1 dim arrays only !");
+  //   exit(EXIT_FAILURE);
+  // }
   match(RB_TOKEN);
   lexer.next_sym();
   return arr_type->valueType;
