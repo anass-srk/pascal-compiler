@@ -619,10 +619,16 @@ Const Parser::constant(){
   if(t.type == ID_TOKEN){
     auto tmp = get_constant(t.id);
     if(!tmp){
-      println("No constant with id (",t.id,") exists !");
-      exit(EXIT_FAILURE);
+      auto ev = get_enum_value(t.id);
+      if(!ev){
+        println("No constant or enum with id (", t.id, ") exists !");
+        exit(EXIT_FAILURE);
+      }
+      c.type = INT_TYPE;
+      c.value = std::dynamic_pointer_cast<EnumType>(ev)->ids[t.id];
+    }else{
+      c = *tmp;
     }
-    c = *tmp;
   }else{
     switch(t.type){
       case NUM_INT_TOKEN:
@@ -1499,7 +1505,7 @@ std::shared_ptr<Type> Parser::factor(){
         lexer.next_sym();
         vm.add_inst(PUSH_CONST_OP);
         vm.add_data((int)enum_type->ids[token.id]);
-        return std::dynamic_pointer_cast<Type>(enum_type);
+        return get_type("int");
       }else{
         auto v = variable_access();
         if(v){
@@ -2183,6 +2189,7 @@ void Parser::case_statement(){
     case INT_TYPE: 
     case REAL_TYPE:
     case CHAR_TYPE:
+    case ENUM_TYPE:
     break;
     default:
       println("Can compare chars, ints and floats only !");
