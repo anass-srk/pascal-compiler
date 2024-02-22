@@ -1155,6 +1155,10 @@ void Parser::procedure_declaration(){
   if(storage_beg != (uint)-1){
     vm.add_inst(PUSH_CONST_OP);
     vm.add_data(args_size);
+    vm.add_inst(REV_OP);
+
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
     vm.add_inst(PUSH_ADDR_OP);
     vm.add_data(storage_beg);
     vm.add_inst(MOVN_OP);
