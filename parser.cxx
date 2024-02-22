@@ -195,6 +195,7 @@ std::shared_ptr<FunctionType> Parser::get_function_type(const std::vector<Arg> &
     name += (arg.byRef ? "_var_" : "");
     name += arg.type->name + "_";
   }
+  name += returnType->name + "_";
   for(auto& i:infos){
     if(i.types.contains(name)){
       return std::dynamic_pointer_cast<FunctionType>(i.types[name]);
@@ -1188,10 +1189,10 @@ void Parser::function_declaration(){
     println("No type name '",type_name,"' exists !");
     exit(EXIT_FAILURE);
   }
-  if(t->type == ARRAY_TYPE){
-    println("Functions cannot return arrays !");
-    exit(EXIT_FAILURE);
-  }
+  // if(t->type == ARRAY_TYPE){
+  //   println("Functions cannot return arrays !");
+  //   exit(EXIT_FAILURE);
+  // }
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
   infos[0].functions[name] = std::make_shared<Var>(get_function_type(v,t));
@@ -1880,6 +1881,9 @@ void Parser::assignment_statement(){
     println("No variable named'",name,"' exists !");
     exit(EXIT_FAILURE);
   }
+  if(v->type == ARRAY_TYPE){
+    vm.add_inst(DUPL_OP);
+  }
   match(ASSIGN_TOKEN);
   lexer.next_sym();
   auto e = expression();
@@ -1902,7 +1906,50 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
         
         vm.add_inst(MOV_OP);
         break;
-      case ARRAY_TYPE:
+      case ARRAY_TYPE:{
+        auto type1 = std::dynamic_pointer_cast<ArrayType>(a);
+        auto type2 = std::dynamic_pointer_cast<ArrayType>(b);
+        // if(type1->valueType->type != CHAR_TYPE || type2->valueType->type != CHAR_TYPE){
+        //   println("Can assign only arrays of type char !");
+        //   exit(EXIT_FAILURE);
+        // }
+        if((type1->valueType->type != CHAR_TYPE || type2->valueType->type != CHAR_TYPE) && type1->size != type2->size){
+          println("When assigning arrays of elements other than chars, sizes have to be equal !");
+          exit(EXIT_FAILURE);
+        }
+        if(type1->size < type2->size){
+          println("Cannot assign value to a different array variable (array of char s only) of smaller size !");
+          exit(EXIT_FAILURE);
+        }
+        
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((uint)(b->size+1));
+        vm.add_inst(REV_OP);
+
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data(b->size);
+        vm.add_inst(MOVN_OP);
+
+        for(uint i = type2->size;i < type1->size;++i){
+          vm.add_inst(DUPL_OP);
+
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((uint)i);
+          vm.add_inst(ADDU_OP);
+
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((char)0);
+
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((uint)2);
+          vm.add_inst(REV_OP);
+
+          vm.add_inst(MOV_OP);
+        }
+
+        vm.add_inst(POP_OP);
+
+      }break;
       case RECORD_TYPE:{
         if(a != b){
           println("Cannot assign value to a different record variable !");
@@ -1918,7 +1965,7 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
         vm.add_inst(MOVN_OP);
       }break;
       default:
-        println("Assignment works only on basic types and records ! !");
+        println("Assignment works only on basic types ,records and arrays(of char) ! !");
         exit(EXIT_FAILURE);
     }
     return;

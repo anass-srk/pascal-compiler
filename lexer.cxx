@@ -178,7 +178,7 @@ void Lexer::read_string(){
       if(current_char == 'n'){
         token.id += '\n';
       }else{
-        token.id += '\\' + (char)current_char;
+        token.id += '\0';
       }
     }else{
       token.id += current_char;
