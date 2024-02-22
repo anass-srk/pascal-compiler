@@ -191,7 +191,7 @@ std::shared_ptr<RecordType> Parser::get_record(
 std::shared_ptr<FunctionType> Parser::get_function_type(const std::vector<Arg> &args, std::shared_ptr<Type> returnType){
   std::string name = "_function_";
   for(auto& arg : args){
-    name += "_" ;
+    name += "_" + arg.id + "_";
     name += (arg.byRef ? "_var_" : "");
     name += arg.type->name + "_";
   }
@@ -1140,7 +1140,6 @@ void Parser::procedure_declaration(){
   infos[0].functions[name]->loc = (uint)vm.bytecode.size();
 
   Info info;
-  init_info(info);
   uint args_size = 0;
   for(auto &arg : v){
     info.arg_variables[arg.id] = std::make_shared<Var>(arg.type);
@@ -1180,6 +1179,7 @@ void Parser::function_declaration(){
   if(lexer.next_sym().type == LP_TOKEN){
     v = formal_parameter_list();
   }
+
   match(COLON_TOKEN);
   match_adv(ID_TOKEN);
   std::string type_name = lexer.getToken().id;
@@ -1191,9 +1191,72 @@ void Parser::function_declaration(){
   match_adv(SEMI_TOKEN);
   lexer.next_sym();
   infos[0].functions[name] = std::make_shared<Var>(get_function_type(v,t));
+  infos[0].functions[name]->loc = (uint)vm.bytecode.size();
+
+  Info info;
+  uint args_size = 0;
+  for(auto &arg : v){
+    if(arg.id == name){
+      println("Cannot have argument name same as function name !");
+      exit(EXIT_FAILURE);
+    }
+    info.arg_variables[arg.id] = std::make_shared<Var>(arg.type);
+    info.args_order.emplace_back(arg.id);
+    args_size += arg.type->size;
+  }
+
+  infos.emplace_front(std::move(info));
+
+  uint storage_beg = store_args_variables();
+
+  if(storage_beg != (uint)-1){
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
+    vm.add_inst(REV_OP);
+
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
+    vm.add_inst(PUSH_ADDR_OP);
+    vm.add_data(storage_beg);
+    vm.add_inst(MOVN_OP);
+  }
+
+  infos[0].variables[name] = std::make_shared<Var>(t);
+  
   block();
-  // infos.pop_front();
+
+  vm.add_inst(PUSH_ADDR_OP);
+  vm.add_data(infos[0].variables[name]->loc);
+
+  // show_declarations();
+  infos.pop_front();
+
+  vm.add_inst(RET_BASIC_OP);
 }
+
+// void Parser::function_declaration(){
+//   match(FUNCTION_TOKEN);
+//   match_adv(ID_TOKEN);
+//   std::string name = lexer.getToken().id;
+//   quit_if_id_is_used(name);
+//   std::vector<Arg> v;
+//   if(lexer.next_sym().type == LP_TOKEN){
+//     v = formal_parameter_list();
+//   }
+//   match(COLON_TOKEN);
+//   match_adv(ID_TOKEN);
+//   std::string type_name = lexer.getToken().id;
+//   auto t = get_type(type_name);
+//   if(!t){
+//     println("No type name '",type_name,"' exists !");
+//     exit(EXIT_FAILURE);
+//   }
+//   match_adv(SEMI_TOKEN);
+//   lexer.next_sym();
+//   infos[0].functions[name] = std::make_shared<Var>(get_function_type(v,t));
+//   block();
+//   // infos.pop_front();
+// }
 
 std::shared_ptr<Type> Parser::expression(){
   auto type_a = simple_expression();
@@ -1543,6 +1606,69 @@ std::shared_ptr<Type> Parser::factor(){
     //case NIL_TOKEN:
     //should check if ID is var or function call
     case ID_TOKEN:{
+      auto fun = get_function(token.id);
+      if(fun){
+        std::string name = lexer.getToken().id;
+        auto proc = get_function(name);
+        if(!proc){
+          println("No function named '",name,"' exists !");
+          exit(EXIT_FAILURE);
+        }
+        auto proc_type = std::dynamic_pointer_cast<FunctionType>(proc->type);
+        if(proc_type->returnType->type == VOID_TYPE){
+          println("Expected a function, found a procedure named '", name, "' !");
+          exit(EXIT_FAILURE);
+        }
+
+        vm.add_inst(PUSH_CONST_OP);
+        uint ret_addr = vm.add_data(0);
+
+        lexer.next_sym();
+
+        std::vector<std::shared_ptr<Type>> exprs;
+        if(proc_type->args.size()){
+          match(LP_TOKEN);
+          do{
+            lexer.next_sym();
+            exprs.push_back(expression());
+          }while(lexer.getToken().type == COMMA_TOKEN);
+          match(RP_TOKEN);
+          lexer.next_sym();
+        }
+
+        if(exprs.size() != proc_type->args.size()){
+          println("Function '", name, "' expects ", proc_type->args.size()," arguments ,it found ",exprs.size()," !");
+          exit(EXIT_FAILURE);
+        }
+
+        for(uint i = 0;i < exprs.size();++i){
+          if(exprs[i] != proc_type->args[i].type){
+            println("For function call of '",name,"' ,expected different ",i,"-th argument !");
+            exit(EXIT_FAILURE);
+          }
+        }
+
+        vm.add_inst(JMP_OP);
+        vm.add_data(proc->loc);
+        vm.bytecode[ret_addr] = (uint)vm.bytecode.size();
+
+        for(uint i = 0;i < proc_type->returnType->size;++i){
+          vm.add_inst(DUPL_OP);
+          
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((uint)i);
+          vm.add_inst(ADDU_OP);
+
+          vm.add_inst(GET_VAL_OP);
+
+          vm.add_inst(PUSH_CONST_OP);
+          vm.add_data((uint)2);
+          vm.add_inst(REV_OP);
+        }
+        vm.add_inst(POP_OP);
+
+        return proc_type->returnType;
+      }else{
       auto c = get_constant(token.id);
       std::shared_ptr<EnumType> enum_type;
       if(c){
@@ -1589,9 +1715,10 @@ std::shared_ptr<Type> Parser::factor(){
           vm.add_inst(GET_VAL_OP);
           return v;
         }else{
-          println("No variable or constant or enum value named '", token.id, "' exists !");
+          println("No function or variable or constant or enum value named '", token.id, "' exists !");
           exit(EXIT_FAILURE);
         }
+      }
       }
     }break;
     case LP_TOKEN:{
