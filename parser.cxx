@@ -1156,10 +1156,10 @@ void Parser::procedure_declaration(){
     vm.add_data(args_size);
     vm.add_inst(REV_OP);
 
-    vm.add_inst(PUSH_CONST_OP);
-    vm.add_data(args_size);
     vm.add_inst(PUSH_ADDR_OP);
     vm.add_data(storage_beg);
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
     vm.add_inst(MOVN_OP);
   }
   
@@ -1214,10 +1214,10 @@ void Parser::function_declaration(){
     vm.add_data(args_size);
     vm.add_inst(REV_OP);
 
-    vm.add_inst(PUSH_CONST_OP);
-    vm.add_data(args_size);
     vm.add_inst(PUSH_ADDR_OP);
     vm.add_data(storage_beg);
+    vm.add_inst(PUSH_CONST_OP);
+    vm.add_data(args_size);
     vm.add_inst(MOVN_OP);
   }
 
@@ -1712,7 +1712,36 @@ std::shared_ptr<Type> Parser::factor(){
       }else{
         auto v = variable_access();
         if(v){
-          vm.add_inst(GET_VAL_OP);
+          switch(v->type){
+            case INT_TYPE:
+            case UINT_TYPE:
+            case REAL_TYPE:
+            case CHAR_TYPE:
+            case BOOLEAN_TYPE:
+            case ENUM_TYPE:
+            case SUBRANGE_TYPE:
+            case RECORD_TYPE:
+            case ARRAY_TYPE:
+            break;
+            default:
+              println("Expected basic type or enum or subrange or record or array !");
+              exit(EXIT_FAILURE);
+          }
+          for(uint i = 0;i < v->size;++i){
+            vm.add_inst(DUPL_OP);
+
+            vm.add_inst(PUSH_CONST_OP);
+            vm.add_data((uint)i);
+            vm.add_inst(ADDU_OP);
+
+            vm.add_inst(GET_VAL_OP);
+
+            vm.add_inst(PUSH_CONST_OP);
+            vm.add_data((uint)2);
+            vm.add_inst(REV_OP);
+          }
+          vm.add_inst(POP_OP);
+
           return v;
         }else{
           println("No function or variable or constant or enum value named '", token.id, "' exists !");
@@ -1869,28 +1898,43 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
         
         vm.add_inst(MOV_OP);
         break;
+      case RECORD_TYPE:{
+        if(a != b){
+          println("Cannot assign value to a different record variable !");
+          exit(EXIT_FAILURE);
+        }
+        
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data((uint)(a->size+1));
+        vm.add_inst(REV_OP);
+
+        vm.add_inst(PUSH_CONST_OP);
+        vm.add_data(a->size);
+        vm.add_inst(MOVN_OP);
+      }break;
       default:
-        println("Assignment works only on basic types !");
+        println("Assignment works only on basic types and records ! !");
         exit(EXIT_FAILURE);
     }
     return;
   }
-  if(a->type == CHAR_TYPE && b->type == ARRAY_TYPE){
-    auto arr_type = std::dynamic_pointer_cast<ArrayType>(b);
-    if(arr_type->valueType->type != CHAR_TYPE){
-      println("Can only assign first char of an array char to a char !");
-      exit(EXIT_FAILURE);
-    }
-    for(uint i = 1;i < arr_type->amount;++i){
-      vm.add_inst(POP_OP);
-    }
-    vm.add_inst(PUSH_CONST_OP);
-    vm.add_data((uint)2);
-    vm.add_inst(REV_OP);
 
-    vm.add_inst(MOV_OP);
-    return;
-  }
+  // if(a->type == CHAR_TYPE && b->type == ARRAY_TYPE){
+  //   auto arr_type = std::dynamic_pointer_cast<ArrayType>(b);
+  //   if(arr_type->valueType->type != CHAR_TYPE){
+  //     println("Can only assign first char of an array char to a char !");
+  //     exit(EXIT_FAILURE);
+  //   }
+  //   for(uint i = 1;i < arr_type->amount;++i){
+  //     vm.add_inst(POP_OP);
+  //   }
+  //   vm.add_inst(PUSH_CONST_OP);
+  //   vm.add_data((uint)2);
+  //   vm.add_inst(REV_OP);
+
+  //   vm.add_inst(MOV_OP);
+  //   return;
+  // }
   println("Cannot assign an expression to a variable of a different type ! (",a->name,",",b->name,")");
   exit(EXIT_FAILURE);
 }
@@ -2130,6 +2174,7 @@ void Parser::procedure_statement(){
         auto t = variable_access();
         if(!t){
           println("Can read variables only !");
+          exit(EXIT_FAILURE);
         }
         if(t->type == ARRAY_TYPE){
         if (auto arr_type = std::dynamic_pointer_cast<ArrayType>(t); arr_type->valueType->type == CHAR_TYPE){

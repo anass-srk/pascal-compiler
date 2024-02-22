@@ -221,9 +221,9 @@ void VM::mov_op(){
 // move from top of the stack to destination address n bytes then pops stack n times
 void VM::movn_op(){
   Print("MOVN ");
-  uint dest = bytecode[bytecode.size() - 1].u;
-  bytecode.pop_back();
   uint amount = bytecode[bytecode.size() - 1].u;
+  bytecode.pop_back();
+  uint dest = bytecode[bytecode.size() - 1].u;
   bytecode.pop_back();
   Println(amount," of bytes to ",dest);
   for(uint i = 0;i < amount;++i){
