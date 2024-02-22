@@ -490,7 +490,7 @@ void Parser::program(){
   block();
   match(DOT_TOKEN);
   vm.add_inst(HALT_OP);
-  vm.run();
+  // vm.run();
 }
 
 void Parser::block(){
@@ -1186,6 +1186,10 @@ void Parser::function_declaration(){
   auto t = get_type(type_name);
   if(!t){
     println("No type name '",type_name,"' exists !");
+    exit(EXIT_FAILURE);
+  }
+  if(t->type == ARRAY_TYPE){
+    println("Functions cannot return arrays !");
     exit(EXIT_FAILURE);
   }
   match_adv(SEMI_TOKEN);
@@ -1898,6 +1902,7 @@ void Parser::assign_var(std::shared_ptr<Type> a, std::shared_ptr<Type> b){
         
         vm.add_inst(MOV_OP);
         break;
+      case ARRAY_TYPE:
       case RECORD_TYPE:{
         if(a != b){
           println("Cannot assign value to a different record variable !");

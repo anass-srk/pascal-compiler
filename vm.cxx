@@ -251,7 +251,11 @@ void VM::write_op(){
     case REAL_STD: print(value.f); break;
     case UINT_STD: print(value.u); break;
     case UCHAR_STD: print((int)value.c); break;
-    case CHAR_STD: print(value.c); break;
+    case CHAR_STD:{
+      if(value.c){
+        print(value.c);
+      }
+    }break;
     case STRING_STD:{
       if(value.u == 0){
         print(string_stack.top());
