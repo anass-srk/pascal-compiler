@@ -1,5 +1,5 @@
 # Description
-This is a simple pascal compiler + interpreter.  
+This is a simple pascal compiler + interpreter for our school project at ENSIAS (2A GL 2023-2024).  
 The grammar is located in gram.txt (reduced grammar from http://www.felix-colibri.com/papers/compilers/pascal_grammar/pascal_grammar.html).  
 ### Compilation
 The compiler (pascalc) runs 4 tasks :  
